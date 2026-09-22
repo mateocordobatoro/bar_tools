@@ -1,11 +1,6 @@
-export default function Home() {
-  return (
-    <main className="shell">
-      <section className="card">
-        <div className="eyebrow">BarThings</div>
-        <h1>MVP scaffold is ready.</h1>
-        <p>Next target: PIN login, role routing, requests, partial batching, blockers and ready state.</p>
-      </section>
-    </main>
-  );
-}
+import { redirect } from "next/navigation";
+import { getAccess } from "@/lib/auth/session";
+import { destination } from "@/lib/auth/access";
+
+export const dynamic = "force-dynamic";
+export default async function Home() { redirect(destination(await getAccess())); }

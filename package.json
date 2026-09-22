@@ -2,6 +2,7 @@
   "name": "barthings",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": "24.x"
   },
@@ -9,7 +10,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:supabase": "node --test scripts/supabase.test.mjs",
+    "check:supabase": "node --env-file-if-exists=.env.local scripts/check-supabase.mjs",
+    "test:database": "node --test scripts/database-contract.test.mjs",
+    "test:database:local": "node scripts/test-database-local.mjs",
+    "test:supabase:stack": "node scripts/run-supabase-stack.mjs",
+    "test:auth": "node --test scripts/auth.test.mjs",
+    "test:auth:http": "node scripts/auth-http.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",

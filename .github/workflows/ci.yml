@@ -18,4 +18,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run test:supabase
+      - run: npm run test:database
+      - run: npm run test:auth
+      - run: npm run test:auth:http
       - run: npm run build

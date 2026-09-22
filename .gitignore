@@ -7,3 +7,4 @@ out/
 .vercel/
 npm-debug.log*
 .DS_Store
+supabase/.temp/
