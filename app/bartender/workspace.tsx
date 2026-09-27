@@ -4,7 +4,7 @@ import type { Availability } from '@/lib/domain/contracts';
 import { amount,batches,nextStep,prepGroups,type Version } from '@/lib/bartender/model';
 import { useWorkspace } from '@/lib/bartender/use-workspace';
 export default function Workspace({staffId}:{staffId:string}) {
- const {snapshot,tab,setTab,selection,setSelection,qty,setQty,availability,setAvailability,message,busy,loading,reason,setReason,pending,refresh,act,choose,selectedVersion,selectedRun}=useWorkspace(staffId);
+ const {stale,snapshot,tab,setTab,selection,setSelection,qty,setQty,availability,setAvailability,message,busy,loading,reason,setReason,pending,refresh,act,completeRemaining,choose,selectedVersion,selectedRun}=useWorkspace(staffId);
  const detailHeading=useRef<HTMLHeadingElement>(null);
  useEffect(()=>{if(selection)detailHeading.current?.focus();},[selection?.kind,selection?.id]);
  const recipeName=(v?:Version)=>snapshot?.recipes.find(r=>r.id===v?.recipe_id)?.name??'Recipe';
@@ -23,15 +23,15 @@ export default function Workspace({staffId}:{staffId:string}) {
    <p>{a.current_batch_stock===null?'Stock count needed':`${batches(a.current_batch_stock)} in stock`}</p>
    {a.can_complete?<p>Can make {batches(a.selected_batch_quantity)}{a.max_full_batches!==null?` · ${a.max_full_batches} full batches possible`:''}</p>:a.can_start?<p>Can complete through {reachable?.name??`step ${a.reachable_step}`}</p>:<p>Not available to make yet</p>}
    {a.missing_inputs.length>0&&<><small>Missing{a.can_start?' later':''}</small>{missingSummary(a)}</>}
-   <button className="secondary" onClick={()=>choose(v)}>View recipe</button></article>;
+   <div className="recipe-actions"><button className="secondary" onClick={()=>choose(v)}>View Recipe</button><button disabled={busy||pending!==null||stale||!(a.can_complete||a.can_start)} onClick={()=>choose(v)}>Start Batch</button></div></article>;
  };
  const groups=snapshot?prepGroups(snapshot):null;
  const detailVersion=selectedVersion??snapshot?.versions.find(v=>v.id===selectedRun?.recipe_version_id);
  const runAvailable=selectedRun?snapshot?.runAvailability[selectedRun.id]:null;
  const next=selectedRun&&snapshot?nextStep(snapshot,selectedRun):null;
- const locked=busy||pending!==null;
+ const locked=busy||pending!==null||stale;
  return <>
-  <nav className="work-tabs" aria-label="Workspace sections">{['Prep','In progress','Batch Stock'].map(t=><button key={t} aria-current={tab===t?'page':undefined} onClick={()=>{setTab(t);setSelection(null);}}>{t}</button>)}</nav>
+  <nav className="work-tabs" aria-label="Workspace sections">{['Prep','In progress','Batch Stock'].map(t=><button key={t} disabled={busy} aria-current={tab===t?'page':undefined} onClick={()=>{setTab(t);setSelection(null);}}>{t}</button>)}</nav>
   <div className="work-toolbar"><small>Stock updates automatically</small><button className="secondary" disabled={busy} onClick={()=>void refresh()}>Refresh</button></div>
   {message&&<p role="status" className="notice">{message}</p>}
   {busy&&<p role="status" className="saving">Saving… Please wait.</p>}
@@ -39,7 +39,7 @@ export default function Workspace({staffId}:{staffId:string}) {
   {loading&&<p role="status">Loading recipes and stock…</p>}
   {!loading&&!snapshot&&<p>Workspace unavailable. Use Refresh to try again.</p>}
   {snapshot&&selection&&detailVersion?<section className="work-detail" aria-label="Recipe details">
-   <button className="secondary" onClick={()=>setSelection(null)}>Back to {tab}</button>
+   <button className="secondary" disabled={busy} onClick={()=>setSelection(null)}>Back to {tab}</button>
    <h2 ref={detailHeading} tabIndex={-1} className="detail-heading">{recipeName(detailVersion)}</h2><small>Version {detailVersion.version_number} · {detailVersion.production_mode==='SIMPLE'?'Make in one operation':'Ordered steps'}</small>
    {selectedVersion?<>
     <fieldset disabled={locked}><legend>Batch quantity</legend><div className="quantity-options">{snapshot.overview.find(a=>a.recipe_version_id===selectedVersion.id)?.allowed_batch_sizes.slice(0,4).map(n=><button key={n} aria-pressed={qty===String(n)} onClick={()=>{setAvailability(null);setQty(String(n));}}>{n}</button>)}</div>{(snapshot.overview.find(a=>a.recipe_version_id===selectedVersion.id)?.allowed_batch_sizes.length??0)>4&&<details className="more-quantities"><summary>More batch sizes · {qty} selected</summary><div className="quantity-options">{snapshot.overview.find(a=>a.recipe_version_id===selectedVersion.id)?.allowed_batch_sizes.slice(4).map(n=><button key={n} aria-pressed={qty===String(n)} onClick={()=>{setAvailability(null);setQty(String(n));}}>{n}</button>)}</div></details>}</fieldset>
@@ -50,28 +50,43 @@ export default function Workspace({staffId}:{staffId:string}) {
      {availability.missing_inputs.length>0&&<div className="notice"><strong>{availability.can_start&&!availability.can_complete?'Missing later':'Missing inputs'}</strong>{missingSummary(availability)}</div>}
      {snapshot.requests.filter(q=>q.state==='OPEN'&&q.recipe_id===detailVersion.recipe_id).map(q=><p key={q.request_id}>Management needs {batches(q.remaining)} more. Production links automatically; any excess remains in Batch Stock.</p>)}
      <p>{detailVersion.production_mode==='SIMPLE'?'Confirm when prepared. Ingredients and stock update together.':'Quantity is fixed after starting. Complete each step as you work.'}</p>
-     <button className="primary-action" disabled={locked||!(detailVersion.production_mode==='SIMPLE'?availability.can_complete:availability.can_start)} onClick={()=>void act({kind:detailVersion.production_mode==='SIMPLE'?'simple':'start',version:detailVersion.id,batches:qty,key:crypto.randomUUID()})}>{detailVersion.production_mode==='SIMPLE'?`Confirm production · ${batches(Number(qty))}`:`Start · ${batches(Number(qty))}`}</button>
+     <button className="primary-action" disabled={locked||!(detailVersion.production_mode==='SIMPLE'?availability.can_complete:availability.can_start)} onClick={()=>void act({kind:detailVersion.production_mode==='SIMPLE'?'simple':'start',version:detailVersion.id,batches:qty,key:crypto.randomUUID()})}>{`Start Batch · ${batches(Number(qty))}`}</button>
     </>}
    </>:selectedRun?<>
-    <p>{batches(selectedRun.batch_quantity)} · {selectedRun.lifecycle==='BLOCKED'?`Waiting: ${snapshot.blockers[selectedRun.id]??'Paused work'}`:'In progress'}</p>
+    <p>{batches(selectedRun.batch_quantity)} · {selectedRun.lifecycle==='BLOCKED'?`Waiting: ${snapshot.blockers[selectedRun.id]??'Paused work'}`:selectedRun.lifecycle==='COMPLETED'?'Batch completed':selectedRun.lifecycle==='ABANDONED'?'Work ended':'In progress'}</p>
     {selectedRun.request_id&&<p>Linked automatically to a management request.</p>}
-    <ol>{snapshot.steps.filter(s=>s.recipe_version_id===detailVersion.id).sort((a,b)=>a.step_order-b.step_order).map(step=>{
-     const done=snapshot.runSteps.find(s=>s.batch_run_id===selectedRun.id&&s.recipe_step_id===step.id)?.status==='DONE';
-     return <li key={step.id} className={done?'step-done':next?.step.id===step.id?'step-next':'step-later'}><details open={!done&&next?.step.id===step.id}><summary>{done?'✓ Completed · ':next?.step.id===step.id?'Next · ':'Later · '}{step.name}</summary>{step.instructions&&<p>{step.instructions}</p>}{requirements(detailVersion,selectedRun.batch_quantity,step.id)}</details></li>;
+    <details className="recipe-ingredients"><summary>Ingredients</summary>{requirements(detailVersion,selectedRun.batch_quantity)}</details>
+    <h3>Steps</h3>
+    <ol className="batch-checklist">{snapshot.steps.filter(s=>s.recipe_version_id===detailVersion.id).sort((a,b)=>a.step_order-b.step_order).map(step=>{
+     const record=snapshot.runSteps.find(s=>s.batch_run_id===selectedRun.id&&s.recipe_step_id===step.id);
+     const done=record?.status==='DONE',isNext=next?.step.id===step.id;
+     const stepMissing=runAvailable?{...runAvailable,missing_inputs:runAvailable.missing_inputs.filter(m=>m.step_order===step.step_order)}:null;
+     return <li key={step.id} className={done?'step-done':isNext?'step-next':'step-later'}>
+      <div className="checklist-line">
+       <details className="step-details"><summary><span>{done?'✓ ':''}{step.name}</span><small>{done?'Completed':stepMissing?.missing_inputs.length?'Missing inputs':isNext?'Next':''}</small></summary>
+        {step.instructions&&<p>{step.instructions}</p>}
+        {requirements(detailVersion,selectedRun.batch_quantity,step.id)}
+        {!done&&stepMissing?.missing_inputs.length?<div className="step-missing">{missingSummary(stepMissing)}</div>:null}
+       </details>
+       {!done&&isNext&&selectedRun.lifecycle==='IN_PROGRESS'&&<button className="secondary" disabled={locked||!record||!runAvailable||runAvailable.reachable_step<step.step_order} onClick={()=>{if(record)void act({kind:'step',run:selectedRun.id,step:record.id,key:crypto.randomUUID()});}}>Complete {step.name}</button>}
+      </div>
+     </li>;
     })}</ol>
-    {runAvailable?.missing_inputs.length? <div className="notice"><strong>Missing inputs</strong>{missingSummary(runAvailable)}</div>:null}
-    {selectedRun.lifecycle==='BLOCKED'?<button className="primary-action" disabled={locked} onClick={()=>void act({kind:'resume',run:selectedRun.id,reason:'',key:crypto.randomUUID()})}>Resume work</button>:<>
-     <button className="primary-action" disabled={locked||!next||!runAvailable||runAvailable.reachable_step<next.step.step_order} onClick={()=>{if(next?.record)void act({kind:'step',run:selectedRun.id,step:next.record.id,key:crypto.randomUUID()});}}>Complete {next?.step.name??'next step'}</button>
-     <label className="block-reason">Waiting for something?<input value={reason} onChange={e=>setReason(e.target.value)} maxLength={2000} placeholder="e.g. waiting for filters" autoComplete="off" enterKeyHint="done" disabled={locked}/></label>
-     <button className="secondary" disabled={locked||!reason.trim()} onClick={()=>void act({kind:'block',run:selectedRun.id,reason:reason.trim(),key:crypto.randomUUID()})}>Pause with reason</button>
-    </>}
+    {selectedRun.lifecycle==='COMPLETED'?<p role="status" className="notice">Batch completed · {batches(selectedRun.batch_quantity)} added to Batch Stock.</p>:selectedRun.lifecycle==='BLOCKED'?<button className="primary-action" disabled={locked} onClick={()=>void act({kind:'resume',run:selectedRun.id,reason:'',key:crypto.randomUUID()})}>Resume work</button>:selectedRun.lifecycle==='IN_PROGRESS'?<>
+
+     <button className="primary-action" disabled={locked||!next||!runAvailable||runAvailable.reachable_step<next.step.step_order} onClick={()=>void completeRemaining()}>Complete remaining steps</button>
+     <p>Confirm when prepared · adds {batches(selectedRun.batch_quantity)} to stock.</p>
+     <details className="stopper-details"><summary>Can't continue?</summary><label className="block-reason">Reason<input value={reason} onChange={e=>setReason(e.target.value)} maxLength={2000} placeholder="e.g. waiting for filters" autoComplete="off" enterKeyHint="done" disabled={locked}/></label>
+     <button className="secondary" disabled={locked||!reason.trim()} onClick={()=>void act({kind:'block',run:selectedRun.id,reason:reason.trim(),key:crypto.randomUUID()})}>Can't continue</button>
+     </details>
+    </>:null}
    </>:<p>This run has finished. Return to Batch Stock.</p>}
   </section>:snapshot&&<>
    {selection?.kind==='run'&&!selectedRun&&<p role="status">This run is no longer in progress. Check Batch Stock.</p>}
    {tab==='Prep'&&<>
     <section className={snapshot.requests.some(q=>q.state==='OPEN')?'request-section':'empty-section'}><h2>Requests</h2>{snapshot.requests.filter(q=>q.state==='OPEN').length===0?<p>No open management requests.</p>:<div className="work-grid">{snapshot.requests.filter(q=>q.state==='OPEN').map(q=>{
      const v=snapshot.versions.find(v=>v.recipe_id===q.recipe_id&&snapshot.overview.some(a=>a.recipe_version_id===v.id));
-     return <article className="work-card" key={q.request_id}><h3>{snapshot.recipes.find(r=>r.id===q.recipe_id)?.name??'Recipe'}</h3><p className="request-remaining">{batches(q.remaining)} remaining</p><dl className="request-totals"><div><dt>Requested</dt><dd>{batches(q.requested)}</dd></div><div><dt>Fulfilled</dt><dd>{batches(q.fulfilled)}</dd></div></dl>{q.in_progress>0&&<p>{batches(q.in_progress)} underway</p>}{v?<button onClick={()=>choose(v)}>Prepare</button>:<p>Ask management for an available recipe version.</p>}</article>;
+     return <article className="work-card" key={q.request_id}><h3>{snapshot.recipes.find(r=>r.id===q.recipe_id)?.name??'Recipe'}</h3><p className="request-remaining">{batches(q.remaining)} remaining</p><dl className="request-totals"><div><dt>Requested</dt><dd>{batches(q.requested)}</dd></div><div><dt>Fulfilled</dt><dd>{batches(q.fulfilled)}</dd></div></dl>{q.in_progress>0&&<p>{batches(q.in_progress)} underway</p>}{v?<button onClick={()=>choose(v)}>Start Batch</button>:<p>Ask management for an available recipe version.</p>}</article>;
     })}</div>}</section>
     {([['Suggested to prep',groups!.suggested,'No low-stock suggestions.'],['Ready to make',groups!.ready.filter(a=>!a.should_prep),groups!.suggested.some(a=>a.can_complete)?'See low-stock recipes above.':'No recipes can be completed with current stock.'],['Can start',groups!.start.filter(a=>!a.should_prep),groups!.suggested.some(a=>a.can_start&&!a.can_complete)?'See low-stock recipes above.':'No partial multistep work available.'],['Other recipes',groups!.unavailable,'']] as const).map(([title,list,empty])=><section key={title} className={list.length?undefined:'empty-section'}><h2>{title}</h2>{title==='Suggested to prep'&&list.length>0&&<p>Low stock — prepare these soon.</p>}{title==='Ready to make'&&list.length>0&&<p>Enough ingredients to finish.</p>}{title==='Can start'&&list.length>0&&<p>Start now; later steps need more ingredients.</p>}{list.length?<div className="work-grid"> {list.map(card)}</div>:empty&&<p>{empty}</p>}</section>)}
    </>}

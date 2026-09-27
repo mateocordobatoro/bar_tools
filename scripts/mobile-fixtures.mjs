@@ -3,6 +3,7 @@ import {id,sample,fixture} from './bartender-fixtures.mjs';
 const noop=()=>{};
 export function stateFor(page){
  const s=fixture();s.requests[0].in_progress=.5;
+ s.requirements.push({id:id(62),recipe_version_id:id(2),step_id:id(32),item_id:id(71),quantity_per_batch:500},{id:id(63),recipe_version_id:id(2),step_id:id(33),item_id:id(72),quantity_per_batch:1});
  s.items[0].name='Cazadores reposado 100% agave — reserve bottle for service';
  s.recipes[1].name='Clarified pineapple, coconut and toasted spice cordial';
  s.items[1].name='Fine clarification filters — food-safe paper';
@@ -21,5 +22,5 @@ export function stateFor(page){
   if(page==='missing'){availability.can_complete=false;availability.missing_inputs=longMissing;}
  }
  if(['run','blocked'].includes(page)){selectedRun=s.runs[0];selection={kind:'run',id:selectedRun.id};}
- return {snapshot:s,tab:page==='stock'?'Batch Stock':['run','blocked','progress'].includes(page)?'In progress':'Prep',selection,selectedVersion,selectedRun,qty:'1',availability,reason:'',pending:['pending','saving'].includes(page)?{kind:'simple',version:id(1),batches:'1',key:id(99)}:null,busy:page==='saving',loading:false,message:page==='changed'?'Stock or this step changed. Review the refreshed details.':page==='session'?'Your access changed. Sign in again.':'',setTab:noop,setSelection:noop,setQty:noop,setAvailability:noop,setReason:noop,refresh:noop,act:noop,choose:noop};
+ return {snapshot:s,tab:page==='stock'?'Batch Stock':['run','blocked','progress'].includes(page)?'In progress':'Prep',selection,selectedVersion,selectedRun,qty:'1',availability,reason:'',pending:['pending','saving'].includes(page)?{kind:'simple',version:id(1),batches:'1',key:id(99)}:null,busy:page==='saving',loading:false,message:page==='changed'?'Stock or this step changed. Review the refreshed details.':page==='session'?'Your access changed. Sign in again.':'',setTab:noop,setSelection:noop,setQty:noop,setAvailability:noop,setReason:noop,refresh:noop,act:noop,completeRemaining:noop,choose:noop};
 }

@@ -2,13 +2,13 @@ import type { Availability, ProductionMode } from '@/lib/domain/contracts';
 export type Version = { id:string; recipe_id:string; version_number:number; production_mode:ProductionMode; stock_identity_id:string };
 export type Step = { id:string; recipe_version_id:string; step_order:number; name:string; instructions:string|null };
 export type Requirement = { id:string; recipe_version_id:string; step_id:string|null; item_id:string; quantity_per_batch:number };
-export type Run = { id:string; recipe_version_id:string; batch_quantity:number; lifecycle:'IN_PROGRESS'|'BLOCKED'; request_id:string|null };
+export type Run = { id:string; recipe_version_id:string; batch_quantity:number; lifecycle:'IN_PROGRESS'|'BLOCKED'|'COMPLETED'|'ABANDONED'; request_id:string|null };
 export type RunStep = { id:string; batch_run_id:string; recipe_step_id:string; status:string };
 export type RequestProgress = { request_id:string; recipe_id:string; state:string; requested:number; fulfilled:number; remaining:number; in_progress:number };
 export type Snapshot = {
  recipes:{id:string;name:string}[]; versions:Version[]; steps:Step[]; requirements:Requirement[];
  items:{id:string;name:string;base_unit:string}[]; requests:RequestProgress[]; runs:Run[]; runSteps:RunStep[];
- overview:Availability[]; runAvailability:Record<string,Availability>;
+ runHistory?:Run[]; overview:Availability[]; runAvailability:Record<string,Availability>;
  blockers:Record<string,string>; stock:{id:string;name:string;quantity:number|null}[]; fetchedAt:string;
 };
 export type Command =

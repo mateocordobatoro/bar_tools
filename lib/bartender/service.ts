@@ -38,6 +38,6 @@ export async function loadWorkspace(c:SupabaseClient):Promise<Snapshot> {
  const runAvailability=Object.fromEntries(await Promise.all(runs.map(async r=>[r.id,await rpc<Availability>(c,'get_run_availability',{p_run:r.id})])));
  const blockers:Record<string,string>={};
  for(const event of events.sort((a,b)=>a.occurred_at.localeCompare(b.occurred_at))) if(event.event_type==='BLOCK') blockers[event.run_id]=event.detail.reason??'';
- return {recipes,versions,steps,requirements,items,requests,runs,runSteps,overview,runAvailability,blockers,
+ return {recipes,versions,steps,requirements,items,requests,runs,runHistory:allRuns.filter(r=>r.lifecycle==='COMPLETED'||r.lifecycle==='ABANDONED'),runSteps,overview,runAvailability,blockers,
  stock:identities.map(i=>{const account=accounts.find(a=>a.stock_identity_id===i.id);const b=balances.find(b=>b.account_id===account?.id);return {id:i.id,name:i.name,quantity:b?.initialized?Number(b.quantity):null};}),fetchedAt:new Date().toISOString()};
 }

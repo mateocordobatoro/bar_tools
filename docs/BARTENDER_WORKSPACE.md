@@ -199,3 +199,49 @@ has passed. This does not claim a new Vercel deployment, mobile layout acceptanc
 new hosted cross-bartender continuation, simulator enablement or successful PKCE.
 No commit, push, Production change, migration edit or fixture deletion occurred.
 Final documentation whitespace validation: `git diff --check` passed.
+
+## Persistent multistep workspace — local revision, 2026-09-27
+
+Multistep start opens one persistent batch workspace. Ingredients, instructions,
+all ordered steps, completed markers and per-step missing inputs stay visible.
+Each currently valid next step can be completed directly in the checklist;
+completing, blocking or resuming does not navigate away. In progress is for
+re-entering retained work. Navigation is disabled while a sequence is running.
+
+`Complete remaining steps` is a convenience for physical work already performed.
+It sends existing step-completion commands sequentially, each with its own persisted
+idempotency key. It refreshes authoritative state before starting and after every
+operation, verifies the completed step, then selects the next ordered step. It
+stops on missing inputs, blocked work, a rejected command, an uncertain response,
+or a failed refresh. It never marks steps complete locally. An uncertain command
+must be retried with its original key; the whole sequence is not automatically retried.
+A failed refresh disables new production actions until state can be refreshed.
+
+The existing final-step RPC completes the run and credits stock. The workspace
+shows the completed checklist and `Batch completed · … added to Batch Stock` from
+server-read completion state; no separate stock-writing operation is introduced.
+The read adapter retains completed/abandoned runs already returned by its existing
+RLS SELECT for detail rendering, while In progress still lists unfinished runs only.
+`Can't continue` uses the existing BLOCK operation and stores the entered reason;
+Resume uses the existing RESUME operation. Simple `Start Batch` remains atomic.
+
+Local checks: 33 bartender UI/API tests (including sequential success, missing
+inputs after partial success, server rejection, lost response, refresh failure),
+32 Auth tests, typecheck and build passed. Mobile fixture `/run` measured at
+320/375/430px: no overflow, targets at least 44px, input font 16px.
+Review routes: application `/bartender`; read-only local fixture server
+`http://127.0.0.1:3107/run`, `/blocked`, `/multi`, `/simple`.
+Fixtures have no live write handlers. A 375px screenshot was rendered in the task.
+No migrations, RPC/domain semantics, permissions, hosted data, commit, push or
+redeployment are part of this revision. The hosted Preview still runs the previous UI.
+
+### Compact checklist refinement
+
+The subsequent user review replaces always-expanded step contents with compact,
+numbered rows. Every step remains visible; native disclosure arrows reveal its
+instructions, inputs and missing quantities. A short `Missing inputs` label stays
+visible on the affected row. Overall ingredients and the stopper form are also
+collapsible. Removed the green step stripe/background and bartender notice left
+border; reduced explanatory copy. Persistent navigation, sequential execution and
+backend validation are unchanged. Updated 33 UI and 32 Auth checks, typecheck,
+build and diff check pass; 320/375/430px checks show no overflow and no step border.

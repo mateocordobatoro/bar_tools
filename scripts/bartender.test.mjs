@@ -59,7 +59,7 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
     if(c.kind==='block'){state.runs[0].lifecycle='BLOCKED';state.blockers[id(80)]=c.reason;}
     if(c.kind==='resume')state.runs[0].lifecycle='IN_PROGRESS';receipt.set(c.key,true);
    }
-   state.fetchedAt=crypto.randomUUID();if(loseAfterCommit)throw new Error('response lost after commit');return {ok:true,status:200,json:async()=>({result:{}})};
+   state.fetchedAt=crypto.randomUUID();if(loseAfterCommit)throw new Error('response lost after commit');return {ok:true,status:200,json:async()=>({result:{run_id:id(80)}})};
   }
   const parsed=new URL(url,'http://localhost');const version=parsed.searchParams.get('version');
   if(version&&holdAvailability)await new Promise(resolve=>{releaseAvailability=resolve;});
@@ -74,21 +74,21 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   assert.match(text(),/Requested1 batch/);assert.match(text(),/Fulfilled0.5 batches/);assert.match(text(),/Suggested to prep/);assert.match(text(),/Can complete through Clarify/);assert.match(text(),/Filters: 1 unit short/);assert.ok(!text().includes('ledger'));
   assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Simulate sales').disabled);assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Reset demo').disabled);
   assert.equal([...document.querySelectorAll('h3')].filter(h=>h.textContent==='Margarita').length,2,'No duplicate low-stock recipe in Ready to make');
-  await click('Prepare');assert.equal(document.querySelector('.quantity-options').children.length,4);assert.ok(document.querySelector('.more-quantities'));assert.match(text(),/any excess remains in Batch Stock/);assert.match(text(),/250 ml · Tequila/);await click('1');
+  await click('Start Batch');assert.equal(document.querySelector('.quantity-options').children.length,4);assert.ok(document.querySelector('.more-quantities'));assert.match(text(),/any excess remains in Batch Stock/);assert.match(text(),/250 ml · Tequila/);await click('1');
   holdAvailability=true;state.fetchedAt='background-refresh';await click('Refresh');
-  assert.ok([...document.querySelectorAll('button')].some(b=>b.textContent==='Confirm production · 1 batch'&&!b.disabled),'Background refresh preserves the current selection action');
+  assert.ok([...document.querySelectorAll('button')].some(b=>b.textContent==='Start Batch · 1 batch'&&!b.disabled),'Background refresh preserves the current selection action');
   holdAvailability=false;await act(async()=>releaseAvailability());
-  await click('Confirm production · 1 batch');assert.equal(calls.at(-1).batches,'1');assert.equal(state.stock[0].quantity,1.24);
+  await click('Start Batch · 1 batch');assert.equal(calls.at(-1).batches,'1');assert.equal(state.stock[0].quantity,1.24);
   await click('Batch Stock');assert.match(text(),/1.24 batches/);await click('Prep');assert.match(text(),/No open management requests/);
   // External stock consumption appears on refresh; UI does not write balances.
   state.stock[0].quantity=.2;state.overview[0].current_batch_stock=.2;state.overview[0].should_prep=true;state.fetchedAt='external-sale';
   await click('Refresh');const suggestions=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Suggested to prep');assert.match(suggestions.textContent,/Margarita/);assert.match(suggestions.textContent,/0.2 batches in stock/);
-  const startSection=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Can start');await act(async()=>startSection.querySelector('button').click());await click('Start · 0.5 batches');await click('In progress');await click('Continue');await click('Complete Clarify');await click('Continue');assert.equal(document.querySelector('.step-done details').open,false);assert.equal(document.querySelector('.step-next details').open,true);assert.match(text(),/✓ Completed · Clarify/);assert.match(text(),/Next · Filter/);
+  const startSection=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Can start');await act(async()=>startSection.querySelector('button').click());await click('Start Batch · 0.5 batches');assert.ok(document.querySelector('.batch-checklist'));await click('Complete Clarify');assert.ok(document.querySelector('.step-done'));assert.ok(document.querySelector('.step-next'));assert.equal(document.querySelectorAll('.batch-checklist .step-details').length,2);assert.ok([...document.querySelectorAll('.step-details')].every(d=>!d.open));assert.match(text(),/✓ ClarifyCompleted/);assert.match(text(),/Filter/);
   // A fresh bartender mounts the same shared run and can operate it.
   await act(async()=>root.render(React.createElement(Component,{staffId:id(101),key:'second'})));await click('In progress');await click('Continue');
   const input=document.querySelector('input');await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input,'Waiting for filters');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
-  await click('Pause with reason');await click('Continue');assert.match(text(),/Waiting: Waiting for filters/);await click('Resume work');assert.equal(calls.at(-1).kind,'resume');
-  await click('Continue');loseResponse=true;await click('Complete Filter');assert.match(text(),/Retry same action/);const key=calls.at(-1).key;await click('Retry same action');assert.equal(calls.at(-1).key,key);assert.equal(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(101)),null);
+  await click("Can't continue");assert.match(text(),/Waiting: Waiting for filters/);await click('Resume work');assert.equal(calls.at(-1).kind,'resume');
+  loseResponse=true;await click('Complete Filter');assert.match(text(),/Retry same action/);const key=calls.at(-1).key;await click('Retry same action');assert.equal(calls.at(-1).key,key);assert.equal(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(101)),null);
   assert.equal(calls.some(c=>'actor' in c||'request' in c),false);
  }finally{await act(async()=>root.unmount());dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });
@@ -112,5 +112,56 @@ import {stateFor} from './mobile-fixtures.mjs';
 function mobileMarkup(page){const c=load('app/bartender/workspace.tsx',{'@/lib/bartender/model':model,'@/lib/bartender/use-workspace':{useWorkspace:()=>stateFor(page)}},{crypto}).default;return require('react-dom/server').renderToStaticMarkup(require('react').createElement(c,{staffId:'local-fixture'}));}
 test('mobile separates saving from uncertain-result retry',()=>{const saving=mobileMarkup('saving'),pending=mobileMarkup('pending');assert.match(saving,/Saving… Please wait/);assert.ok(!saving.includes('Retry same action'));assert.match(pending,/Retry same action/);});
 test('mobile shows remaining request first, stock low signal, and no duplicate ready recipe',()=>{const prep=mobileMarkup('prep');assert.ok(prep.indexOf('Requests')<prep.indexOf('Suggested to prep'));assert.ok(prep.indexOf('0.5 batches remaining')<prep.indexOf('Requested'));assert.equal((prep.match(/<h3>Margarita<\/h3>/g)||[]).length,2);assert.match(mobileMarkup('stock'),/Low stock · prep suggested/);});
-test('mobile collapses completed steps, exposes next step and keeps blocked action unambiguous',()=>{const run=mobileMarkup('run'),blocked=mobileMarkup('blocked');assert.match(run,/step-done"><details>/);assert.match(run,/step-next"><details open=""/);assert.match(blocked,/Resume work/);assert.ok(!blocked.includes('Complete Filter'));});
+test('mobile shows the full persistent checklist and keeps blocked action unambiguous',()=>{const run=mobileMarkup('run'),blocked=mobileMarkup('blocked');assert.match(run,/batch-checklist/);assert.match(run,/✓ Clarify/);assert.match(run,/Complete remaining steps/);assert.ok(!run.includes('<summary>Next'));assert.match(blocked,/Resume work/);assert.ok(!blocked.includes('Complete Filter'));});
 test('mobile long missing lists remain expandable and forms avoid physical quantity input',()=>{const missing=mobileMarkup('missing'),run=mobileMarkup('run');assert.match(missing,/6 more missing inputs/);assert.match(missing,/ExtraLongIngredientName/);assert.ok(!missing.includes('<input'));assert.match(run,/enterKeyHint="done"/);assert.match(mobileMarkup('changed'),/Stock or this step changed/);});
+
+for(const scenario of ['complete','missing','rejected','lost-response','refresh-failed']) test(`persistent checklist sequential completion: ${scenario}`,async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
+ const previous={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const React=require('react'),{act}=React,{createRoot}=require('react-dom/client');const root=createRoot(document.getElementById('root'));
+ const state=fixture();state.steps=Array.from({length:4},(_,i)=>({id:id(301+i),recipe_version_id:id(2),step_order:i+1,name:`Step ${i+1}`,instructions:`Instructions ${i+1}`}));
+ state.runs=[{id:id(80),recipe_version_id:id(2),batch_quantity:1,lifecycle:'IN_PROGRESS',request_id:null}];
+ state.runSteps=state.steps.map((s,i)=>({id:id(401+i),batch_run_id:id(80),recipe_step_id:s.id,status:i===0?'DONE':'PENDING'}));
+ state.runAvailability[id(80)]=sample(2,{reachable_step:4,missing_inputs:[],can_complete:true});state.runHistory=[];
+ const calls=[];let active=0,maxActive=0,failRead=false;
+ const mockFetch=async(url,options={})=>{
+  if(options.method==='POST'){
+   const c=JSON.parse(options.body);calls.push(c);active++;maxActive=Math.max(maxActive,active);await Promise.resolve();active--;
+   if(scenario==='rejected'&&c.step===id(403))return {ok:false,status:409,json:async()=>({})};
+   state.runSteps.find(s=>s.id===c.step).status='DONE';state.fetchedAt=crypto.randomUUID();
+   if(scenario==='missing'&&c.step===id(402)){state.runAvailability[id(80)].reachable_step=2;state.runAvailability[id(80)].missing_inputs=[{item_id:state.items[1].id,step_order:3,deficit:1,reason:'INSUFFICIENT'}];}
+   if(scenario==='refresh-failed')failRead=true;
+   if(scenario==='lost-response')throw new Error('transport lost after server commit');
+   if(state.runSteps.every(s=>s.status==='DONE')){state.runHistory=[{...state.runs[0],lifecycle:'COMPLETED'}];state.runs=[];}
+   return {ok:true,status:200,json:async()=>({result:{run_id:id(80)}})};
+  }
+  if(failRead)throw new Error('read unavailable');
+  return {ok:true,status:200,json:async()=>structuredClone(state)};
+ };
+ const hook=load('lib/bartender/use-workspace.ts',{'./model':model},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,fetch:mockFetch,crypto,AbortController,AbortSignal,setInterval,clearInterval});
+ const Component=load('app/bartender/workspace.tsx',{'@/lib/bartender/model':model,'@/lib/bartender/use-workspace':hook},{crypto}).default;
+ const click=async label=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(b,label);assert.ok(!b.disabled);await act(async()=>b.click());};
+ try{
+  await act(async()=>root.render(React.createElement(Component,{staffId:id(999)})));
+  await click('In progress');await click('Continue');await click('Complete remaining steps');
+  assert.ok(document.querySelector('.work-detail'),'Workspace retained');
+  assert.equal(document.querySelectorAll('.batch-checklist>li').length,4);
+  assert.equal(maxActive,1,'Writes are strictly sequential');
+  assert.equal(new Set(calls.map(c=>c.key)).size,calls.length,'Each step has its own retry key');
+  assert.deepEqual(calls.map(c=>c.step),scenario==='complete'?[id(402),id(403),id(404)]:scenario==='rejected'?[id(402),id(403)]:[id(402)]);
+  assert.match(document.body.textContent,/✓ Step 1Completed/);
+  if(scenario!=='refresh-failed')assert.match(document.body.textContent,/✓ Step 2Completed/);else assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Complete remaining steps').disabled);
+  if(scenario==='complete'){assert.match(document.body.textContent,/Batch completed · 1 batch added/);assert.equal(document.querySelectorAll('.batch-checklist button').length,0);}
+  if(scenario==='missing'){assert.match(document.body.textContent,/Stopped at Step 3/);assert.match(document.querySelectorAll('.batch-checklist>li')[2].textContent,/Filters: 1 unit short/);}
+  if(scenario==='rejected')assert.match(document.body.textContent,/Stopped: stock or this step changed/);
+  if(scenario==='lost-response'){assert.match(document.body.textContent,/Retry same action/);assert.equal(JSON.parse(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(999))).key,calls[0].key);}
+  if(scenario==='refresh-failed')assert.match(document.body.textContent,/Could not refresh/);
+ }finally{await act(async()=>root.unmount());dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
+});
+
+ test('recipe cards expose separate View Recipe and primary Start Batch actions',()=>{
+ const markup=mobileMarkup('prep');const {JSDOM}=require('jsdom');const dom=new JSDOM(markup);
+ for(const actions of dom.window.document.querySelectorAll('.recipe-actions')){const buttons=actions.querySelectorAll('button');assert.equal(buttons[0].textContent,'View Recipe');assert.equal(buttons[1].textContent,'Start Batch');assert.ok(buttons[0].classList.contains('secondary'));assert.ok(!buttons[1].classList.contains('secondary'));}
+ assert.ok(dom.window.document.querySelectorAll('.recipe-actions').length>0);
+ assert.match(mobileMarkup('multi'),/Start Batch · 1 batch/);dom.window.close();
+ });
