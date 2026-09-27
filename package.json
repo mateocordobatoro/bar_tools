@@ -17,7 +17,8 @@
     "test:database:local": "node scripts/test-database-local.mjs",
     "test:supabase:stack": "node scripts/run-supabase-stack.mjs",
     "test:auth": "node --test scripts/auth.test.mjs",
-    "test:auth:http": "node scripts/auth-http.test.mjs"
+    "test:auth:http": "node scripts/auth-http.test.mjs",
+    "test:bartender": "node --test scripts/bartender.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -35,6 +36,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "jsdom": "^30.1.1"
   }
 }

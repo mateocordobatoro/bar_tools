@@ -54,7 +54,7 @@ try{
     const r=await get(path,cookie(id));check(r.status===307&&new URL(r.headers.get('location'),origin).pathname===expected,`${id} route boundary`);
   }
   for(const [id,path] of [['bar','/bartender'],['manager','/management']]){
-    const r=await get(path,cookie(id));check(r.status===200&&(await r.text()).includes(`Welcome, <!-- -->Synthetic ${id}`),`${id} landing renders`);
+    const r=await get(path,cookie(id));check(r.status===200&&(await r.text()).includes(id==='bar'?'Prep workspace':`Welcome, <!-- -->Synthetic ${id}`),`${id} landing renders`);
   }
   const renewed=await get('/bartender',cookie('bar',true));
   check(renewed.status===200&&refreshes>0,'Expired session refreshed before protected render');

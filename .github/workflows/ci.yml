@@ -21,5 +21,6 @@ jobs:
       - run: npm run test:supabase
       - run: npm run test:database
       - run: npm run test:auth
+      - run: npm run test:bartender
       - run: npm run test:auth:http
       - run: npm run build
