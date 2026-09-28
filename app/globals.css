@@ -10,3 +10,6 @@
 .bartender-shell .notice{border-left:0;border-radius:6px}.batch-checklist>li{padding:4px 0;margin:0}.checklist-line{gap:8px;align-items:flex-start}.step-details{flex:1;min-width:0}.bartender-shell .step-details summary{padding:12px 2px}.step-details summary span{font-weight:600}.step-details summary small{display:block;margin-left:16px;font-weight:400}.checklist-line>button{font-size:12px;padding:8px;align-self:flex-start;margin-top:4px}.step-missing{font-size:13px;color:#655844}.recipe-ingredients{margin:12px 0}.stopper-details{margin-top:12px}.batch-checklist .ingredients{background:transparent;padding-top:0;padding-bottom:0}.batch-checklist .step-done strong{color:inherit}
 
 .recipe-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.work-card .recipe-actions button{flex:1;margin-top:0;padding:10px 12px;white-space:nowrap}
+
+/* Keep empty PREP states quiet and recipe instructions optional on phones. */
+.bartender-shell .empty-section{margin-top:12px;display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap}.bartender-shell .empty-section h2{font-size:14px;margin:0}.bartender-shell .empty-section p{font-size:13px}.bartender-shell .empty-section:has(h2:only-child){display:none}.recipe-preview-steps>li{margin:0;border-bottom:1px solid #dce5df}.recipe-preview-steps details summary{padding:12px 2px}.detail-heading{scroll-margin-top:80px}
