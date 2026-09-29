@@ -21,7 +21,7 @@ export function useWorkspace(staffId:string,diagnostics=false) {
  const appliedCauses=useRef<Cause[]>([]);
  const detailKey=useRef('');
  const trace=useCallback((phase:string,details:Record<string,unknown>={})=>{
-  if(diagnostics)console.info('[bartender-sync]',{phase,timestamp:new Date().toISOString(),...details});
+  if(diagnostics)console.info('[bartender-sync]',JSON.stringify({phase,timestamp:new Date().toISOString(),...details}));
  },[diagnostics]);
  const redirect=useCallback((body:{redirect?:string})=>{if(body.redirect)window.location.assign(body.redirect);},[]);
  const refresh=useCallback(async(force=false,attribution:Cause[]=[{trigger:'user-action'}])=>{

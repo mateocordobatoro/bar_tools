@@ -262,7 +262,7 @@ test('refresh attribution starts before SSE; polling, bursts, user action and re
  const sync=load('lib/bartender/synchronize.ts',{}, {setTimeout:schedule,clearTimeout:cancel});
  dom.window.EventSource=class {constructor(){assert.ok(sources.every(s=>s.closed),'old source closed before constructing replacement');this.handlers={};sources.push(this);}addEventListener(name,fn){this.handlers[name]=fn;}close(){this.closed=true;}};
  const hook=load('lib/bartender/use-workspace.ts',{'./model':model,'./synchronize':sync},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,
- console:{info:(prefix,entry)=>logs.push(entry)},fetch:async()=>{reads++;const value={...fixture(),fetchedAt:'read-'+reads};if(hold){hold=false;await new Promise(r=>release=r);}return {ok:true,json:async()=>value};},
+ console:{info:(prefix,entry)=>{assert.equal(prefix,'[bartender-sync]');assert.equal(typeof entry,'string','diagnostics must survive text-only log collectors');logs.push(JSON.parse(entry));}},fetch:async()=>{reads++;const value={...fixture(),fetchedAt:'read-'+reads};if(hold){hold=false;await new Promise(r=>release=r);}return {ok:true,json:async()=>value};},
  crypto,AbortController,AbortSignal,setTimeout:schedule,clearTimeout:cancel,setInterval:(fn,ms)=>{assert.equal(ms,30000);intervals.set(++timerId,fn);return timerId;},clearInterval:id=>intervals.delete(id)});
  function Probe(){latest=hook.useWorkspace(id(100),true);return null;}
  const flush=async()=>act(async()=>{const t=[...timers.entries()].find(([,t])=>t.ms===350);if(t){timers.delete(t[0]);t[1].fn();}});
