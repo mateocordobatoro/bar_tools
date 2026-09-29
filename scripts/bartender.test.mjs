@@ -46,7 +46,7 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
  const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
  const previous={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  const React=require('react');const {createRoot}=require('react-dom/client');const {act}=React;const root=createRoot(document.getElementById('root'));
- let sources=[];dom.window.EventSource=class {constructor(url){assert.equal(url,'/api/bartender/events');sources.push(this);}close(){this.closed=true;}};
+ let sources=[];dom.window.EventSource=class {constructor(url){assert.equal(url,'/api/bartender/events');sources.push(this);}addEventListener(){}close(){this.closed=true;}};
  let state=fixture(),calls=[],loseResponse=false,rejected=false,receipt=new Map(),holdAvailability=false,releaseAvailability;
  state.overview[1].should_prep=false;state.overview[0].allowed_batch_sizes=[.5,1,1.5,2,2.5,3];
  const mockFetch=async(url,options={})=>{
@@ -93,6 +93,12 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   loseResponse=true;await click('Complete Filter');assert.match(text(),/Retry same action/);const key=calls.at(-1).key;await click('Retry same action');assert.equal(calls.at(-1).key,key);assert.equal(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(101)),null);
   assert.equal(calls.some(c=>'actor' in c||'request' in c),false);
   await act(async()=>{dom.window.dispatchEvent(new dom.window.Event('online'));await new Promise(r=>setTimeout(r,400));});assert.ok(sources.slice(0,-1).every(s=>s.closed));
+  const current=sources.at(-1),obsolete=sources.at(-2),writesBefore=calls.length;
+  await act(async()=>{obsolete.onerror();obsolete.onmessage({data:'stale'});});
+  assert.ok(!current.closed,'late callbacks from old source cannot close replacement');
+  assert.equal(sources.at(-1),current);
+  await act(async()=>{current.onmessage({data:'connected'});await new Promise(r=>setTimeout(r,400));});
+  assert.equal(calls.length,writesBefore,'reconnect signal only reads');
  }finally{await act(async()=>root.unmount());assert.ok(sources.every(s=>s.closed));dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });
 
@@ -183,7 +189,8 @@ test('invalidation coalesces bursts, retains changes during reads/writes and can
 test('SSE preserves session privacy, subscribes only five INSERT/UPDATE tables and cleans up',async()=>{
  let registrations=[],status,removed=0;const timers=new Map();let timerId=0;
  const channel={on(kind,filter,fn){registrations.push({kind,filter,fn});return this;},subscribe(fn){status=fn;return this;}};
- const streamClient={channel:()=>channel,removeChannel:async()=>{removed++;},realtime:{disconnect(){}}};
+ let releaseRemoval,releaseDisconnect,disconnectStarted=false;
+ const streamClient={channel:()=>channel,removeChannel:()=>{removed++;return new Promise(r=>releaseRemoval=r);},realtime:{disconnect(){disconnectStarted=true;return new Promise(r=>releaseDisconnect=r);}}};
  let access={kind:'staff',staff:{role:'bartender'}};let preview=true;
  const route=load('app/api/bartender/events/route.ts',{
  '@supabase/supabase-js':{createClient:()=>streamClient},
@@ -201,7 +208,86 @@ test('SSE preserves session privacy, subscribes only five INSERT/UPDATE tables a
  // timer 1 is connection expiry; timer 2 is coalesced event
  const emit=timers.get(2);timers.delete(2);emit();output+=decoder.decode((await reader.read()).value);
  assert.equal(output,'retry: 3000\n\ndata: connected\n\ndata: stale\n\n');
- await reader.cancel();assert.equal(removed,1);assert.equal(timers.size,0);
+ const cancellation=reader.cancel();let settled=false;cancellation.then(()=>settled=true);
+ await new Promise(r=>setImmediate(r));assert.equal(disconnectStarted,false);assert.equal(settled,false);releaseRemoval();
+ await new Promise(r=>setImmediate(r));assert.equal(disconnectStarted,true);assert.equal(settled,false);releaseDisconnect();await cancellation;
+ assert.equal(removed,1);assert.equal(timers.size,0);
  for(const denied of [{kind:'anonymous'},{kind:'blocked'},{kind:'staff',staff:{role:'management'}}]){access=denied;assert.equal((await route.GET(req)).status,401);}
  preview=false;assert.equal((await route.GET(req)).status,403);
+});
+
+for(const terminal of ['CHANNEL_ERROR','TIMED_OUT','CLOSED'])test(`Realtime ${terminal}: cleanup permits a fresh subscription; run INSERT is coalesced and diagnostics omit rows`,async()=>{
+ const logs=[],channels=[],timers=new Map();let timerId=0,removed=0,releaseAuth;
+ const makeClient=()=>({
+  channel(){const c={registrations:[],on(kind,filter,fn){this.registrations.push({filter,fn});return this;},subscribe(fn){this.status=fn;return this;}};channels.push(c);return c;},
+  removeChannel:async()=>{removed++;},realtime:{disconnect(){}}
+ });
+ const route=load('app/api/bartender/events/route.ts',{
+  '@supabase/supabase-js':{createClient:makeClient},
+  '@/lib/supabase/server':{createClient:async()=>({auth:{getSession:async()=>({data:{session:{access_token:'do-not-log-token'}}})}})},
+  '@/lib/supabase/config':{getSupabaseConfig:()=>({url:'https://preview.invalid',publishableKey:'do-not-log-key'})},
+  '@/lib/auth/access':{resolveAccess:()=>new Promise(r=>releaseAuth=()=>r({kind:'staff',staff:{role:'bartender'}}))},
+  '@/lib/bartender/environment':{isBartenderPreview:()=>true},
+ },{Response,ReadableStream,TextEncoder,process:{env:{BARTENDER_REALTIME_DIAGNOSTICS:'1'}},console:{info:(...v)=>logs.push(v)},
+  setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
+ const req=new NextRequest('https://preview.invalid/api/bartender/events');
+ const pending=route.GET(req);await new Promise(r=>setImmediate(r));
+ assert.equal(channels.length,0,'no subscription before verified auth');releaseAuth();const response=await pending;
+ const c=channels[0];assert.ok(c.registrations.some(r=>r.filter.schema==='public'&&r.filter.table==='batch_runs'&&r.filter.event==='INSERT'));
+ c.status('SUBSCRIBED');
+ const insert=c.registrations.find(r=>r.filter.table==='batch_runs'&&r.filter.event==='INSERT');
+ insert.fn({commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(77),password:'sensitive-row'},old:{token:'secret'}});
+ c.registrations.find(r=>r.filter.table==='batch_run_steps'&&r.filter.event==='INSERT').fn({commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(78),secret:'sensitive-step'}});
+ assert.equal(timers.size,2,'one expiry and one coalesced invalidation');
+ const emit=[...timers.entries()].at(-1);timers.delete(emit[0]);emit[1]();c.status(terminal);
+ const text=await response.text();assert.equal((text.match(/data: stale/g)||[]).length,1);
+ const entries=logs.map(l=>JSON.parse(l[1]));
+ assert.ok(entries.some(e=>e.phase==='status'&&e.status==='SUBSCRIBED'));
+ assert.ok(entries.some(e=>e.phase==='status'&&e.status===terminal));
+ assert.ok(entries.some(e=>e.phase==='database-event'&&e.table==='batch_runs'&&e.eventType==='INSERT'&&e.recordId===id(77)&&e.eventTimestamp==='2026-09-29T12:00:00.000Z'&&e.status==='SUBSCRIBED'&&Number.isFinite(Date.parse(e.receivedAt))));
+ assert.ok(entries.some(e=>e.phase==='database-event'&&e.table==='batch_run_steps'&&e.recordId===id(78)&&e.eventType==='INSERT'));
+ assert.doesNotMatch(JSON.stringify(logs)+text,/sensitive|do-not-log|"new"|"old"/);
+ assert.equal(removed,1);assert.equal(timers.size,0);
+ insert.fn({new:{}});assert.equal(timers.size,0,'closed channel cannot schedule new invalidation');
+ const fresh=route.GET(req);await new Promise(r=>setImmediate(r));releaseAuth();const second=await fresh;
+ channels[1].status('SUBSCRIBED');await second.body.cancel();assert.equal(removed,2);
+});
+
+test('refresh attribution starts before SSE; polling, bursts, user action and replacement generations are distinct',async()=>{
+ const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true});
+ const previous={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+ const React=require('react'),{act}=React,{createRoot}=require('react-dom/client');const root=createRoot(document.getElementById('root'));
+ const logs=[],sources=[],timers=new Map(),intervals=new Map();let timerId=0,reads=0,latest,hold=false,release;
+ const schedule=(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;};const cancel=id=>timers.delete(id);
+ const sync=load('lib/bartender/synchronize.ts',{}, {setTimeout:schedule,clearTimeout:cancel});
+ dom.window.EventSource=class {constructor(){assert.ok(sources.every(s=>s.closed),'old source closed before constructing replacement');this.handlers={};sources.push(this);}addEventListener(name,fn){this.handlers[name]=fn;}close(){this.closed=true;}};
+ const hook=load('lib/bartender/use-workspace.ts',{'./model':model,'./synchronize':sync},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,
+ console:{info:(prefix,entry)=>logs.push(entry)},fetch:async()=>{reads++;const value={...fixture(),fetchedAt:'read-'+reads};if(hold){hold=false;await new Promise(r=>release=r);}return {ok:true,json:async()=>value};},
+ crypto,AbortController,AbortSignal,setTimeout:schedule,clearTimeout:cancel,setInterval:(fn,ms)=>{assert.equal(ms,30000);intervals.set(++timerId,fn);return timerId;},clearInterval:id=>intervals.delete(id)});
+ function Probe(){latest=hook.useWorkspace(id(100),true);return null;}
+ const flush=async()=>act(async()=>{const t=[...timers.entries()].find(([,t])=>t.ms===350);if(t){timers.delete(t[0]);t[1].fn();}});
+ const applied=()=>logs.filter(l=>l.phase==='refetch-applied').at(-1);
+ try {
+  await act(async()=>root.render(React.createElement(Probe)));assert.equal(reads,1);assert.equal(applied().causes[0].trigger,'initial-load');
+  await act(async()=>[...intervals.values()][0]());await flush();assert.equal(reads,2);assert.equal(applied().causes[0].trigger,'polling','polling traces exist without any SSE handshake');
+  const first=sources.at(-1);
+  await act(async()=>{first.handlers.diagnostic({data:JSON.stringify({phase:'database-event',connection:id(70),status:'SUBSCRIBED',schema:'public',table:'batch_runs',eventType:'INSERT',recordId:id(71),eventTimestamp:'2026-09-29T12:00:00Z',receivedAt:'2026-09-29T12:00:01Z',secret:'never-log'})});first.onmessage({data:'stale'});first.onmessage({data:'stale'});first.onmessage({data:'stale'});});
+  await flush();assert.equal(reads,3,'related signals produce one read');assert.equal(applied().causes.length,1);assert.equal(applied().causes[0].trigger,'sse-stale');assert.equal(applied().causes[0].connectionId,id(70));
+  assert.ok(logs.some(l=>l.phase==='server'&&l.recordId===id(71)&&l.table==='batch_runs'));assert.ok(!JSON.stringify(logs).includes('never-log'));
+  await act(async()=>{first.onmessage({data:'stale'});[...intervals.values()][0]();});await flush();assert.deepEqual(Array.from(applied().causes,c=>c.trigger).sort(),['polling','sse-stale'],'mixed causes stay explicit');
+  await act(async()=>latest.refresh());assert.equal(applied().causes[0].trigger,'user-action');
+  const before=reads;hold=true;
+  await act(async()=>first.onmessage({data:'stale'}));await flush();assert.equal(reads,before+1);
+  await act(async()=>dom.window.dispatchEvent(new dom.window.Event('online')));
+  const second=sources.at(-1);assert.notEqual(first,second);assert.ok(first.closed);
+  const replacementCount=sources.length;
+  await act(async()=>{first.onmessage({data:'stale'});first.onerror();first.handlers.diagnostic({data:'{}'});});
+  assert.equal(sources.length,replacementCount);assert.ok(!second.closed);
+  await act(async()=>release());assert.ok(logs.some(l=>l.phase==='refetch-discarded'),'old-generation in-flight response cannot apply');
+  await act(async()=>second.onmessage({data:'connected'}));await flush();assert.equal(applied().causes.at(-1).trigger,'reconnect-recovery');
+  assert.ok(applied().causes.some(c=>c.connectionGeneration>1));
+  await act(async()=>second.onerror());assert.ok(second.closed);
+  await act(async()=>{const retry=[...timers.entries()].find(([,v])=>v.ms===3000);assert.ok(retry);timers.delete(retry[0]);retry[1].fn();});
+  assert.equal(sources.length,replacementCount+1);assert.ok(!sources.at(-1).closed);
+ }finally{await act(async()=>root.unmount());assert.ok(sources.every(s=>s.closed));assert.equal(timers.size,0);assert.equal(intervals.size,0);dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });

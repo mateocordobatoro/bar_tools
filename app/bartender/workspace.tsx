@@ -3,8 +3,8 @@ import { useEffect,useRef } from 'react';
 import type { Availability } from '@/lib/domain/contracts';
 import { amount,batches,nextStep,prepGroups,type Version } from '@/lib/bartender/model';
 import { useWorkspace } from '@/lib/bartender/use-workspace';
-export default function Workspace({staffId}:{staffId:string}) {
- const {stale,snapshot,tab,setTab,selection,setSelection,qty,setQty,availability,setAvailability,message,busy,loading,reason,setReason,pending,refresh,act,completeRemaining,choose,selectedVersion,selectedRun}=useWorkspace(staffId);
+export default function Workspace({staffId,diagnostics=false}:{staffId:string;diagnostics?:boolean}) {
+ const {stale,snapshot,tab,setTab,selection,setSelection,qty,setQty,availability,setAvailability,message,busy,loading,reason,setReason,pending,refresh,act,completeRemaining,choose,selectedVersion,selectedRun}=useWorkspace(staffId,diagnostics);
  const detailHeading=useRef<HTMLHeadingElement>(null);
  useEffect(()=>{if(selection)detailHeading.current?.focus();},[selection?.kind,selection?.id]);
  const recipeName=(v?:Version)=>snapshot?.recipes.find(r=>r.id===v?.recipe_id)?.name??'Recipe';
