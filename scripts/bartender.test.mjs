@@ -9,6 +9,7 @@ function load(path,mocks={},globals={}){
  const js=ts.transpileModule(readFileSync(new URL('../'+path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  const module={exports:{}};vm.runInNewContext(`(function(require,module,exports){${js}\n})`,{process,URL,console,Intl,...globals})(n=>n in mocks?mocks[n]:n==='server-only'?{}:require(n),module,module.exports);return module.exports;
 }
+const synchronization=load('lib/bartender/synchronize.ts',{}, {setTimeout,clearTimeout});
 const model=load('lib/bartender/model.ts');const environment=load('lib/bartender/environment.ts');
 import {id,sample,fixture} from './bartender-fixtures.mjs';
 test('prep distinguishes full completion, partial meaningful progress, unavailable and suggestions',()=>{
@@ -45,6 +46,7 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
  const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
  const previous={window:globalThis.window,document:globalThis.document};globalThis.window=dom.window;globalThis.document=dom.window.document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  const React=require('react');const {createRoot}=require('react-dom/client');const {act}=React;const root=createRoot(document.getElementById('root'));
+ let sources=[];dom.window.EventSource=class {constructor(url){assert.equal(url,'/api/bartender/events');sources.push(this);}close(){this.closed=true;}};
  let state=fixture(),calls=[],loseResponse=false,rejected=false,receipt=new Map(),holdAvailability=false,releaseAvailability;
  state.overview[1].should_prep=false;state.overview[0].allowed_batch_sizes=[.5,1,1.5,2,2.5,3];
  const mockFetch=async(url,options={})=>{
@@ -65,7 +67,7 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   if(version&&holdAvailability)await new Promise(resolve=>{releaseAvailability=resolve;});
   return {ok:true,status:200,json:async()=>structuredClone(version?{...state.overview.find(a=>a.recipe_version_id===version),selected_batch_quantity:Number(parsed.searchParams.get('batches'))}:state)};
  };
- const hook=load('lib/bartender/use-workspace.ts',{'./model':model},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,fetch:mockFetch,crypto,AbortController,AbortSignal,setInterval,clearInterval});
+ const hook=load('lib/bartender/use-workspace.ts',{'./model':model,'./synchronize':synchronization},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,fetch:mockFetch,crypto,AbortController,AbortSignal,setTimeout,clearTimeout,setInterval,clearInterval});
  const Component=load('app/bartender/workspace.tsx',{'@/lib/bartender/model':model,'@/lib/bartender/use-workspace':hook},{crypto}).default;
  const text=()=>document.body.textContent;
  const click=async(label)=>{const button=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(button,label);assert.ok(!button.disabled,label+' enabled');await act(async()=>button.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));};
@@ -75,14 +77,14 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Simulate sales').disabled);assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Reset demo').disabled);
   assert.equal([...document.querySelectorAll('h3')].filter(h=>h.textContent==='Margarita').length,2,'No duplicate low-stock recipe in Ready to make');
   await click('Start Batch');assert.equal(document.querySelector('.quantity-options').children.length,4);assert.ok(document.querySelector('.more-quantities'));assert.match(text(),/any excess remains in Batch Stock/);assert.match(text(),/250 ml · Tequila/);await click('1');
-  holdAvailability=true;state.fetchedAt='background-refresh';await click('Refresh');
+  holdAvailability=true;state.fetchedAt='background-refresh';await act(async()=>{sources.at(-1).onmessage({data:'stale'});sources.at(-1).onmessage({data:'stale'});await new Promise(r=>setTimeout(r,400));});
   assert.ok([...document.querySelectorAll('button')].some(b=>b.textContent==='Start Batch · 1 batch'&&!b.disabled),'Background refresh preserves the current selection action');
   holdAvailability=false;await act(async()=>releaseAvailability());
   await click('Start Batch · 1 batch');assert.equal(calls.at(-1).batches,'1');assert.equal(state.stock[0].quantity,1.24);
   await click('Batch Stock');assert.match(text(),/1.24 batches/);await click('Prep');assert.match(text(),/No open management requests/);
   // External stock consumption appears on refresh; UI does not write balances.
   state.stock[0].quantity=.2;state.overview[0].current_batch_stock=.2;state.overview[0].should_prep=true;state.fetchedAt='external-sale';
-  await click('Refresh');const suggestions=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Suggested to prep');assert.match(suggestions.textContent,/Margarita/);assert.match(suggestions.textContent,/0.2 batches in stock/);
+  await act(async()=>{sources.at(-1).onmessage({data:'stale'});sources.at(-1).onmessage({data:'stale'});await new Promise(r=>setTimeout(r,400));});const suggestions=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Suggested to prep');assert.match(suggestions.textContent,/Margarita/);assert.match(suggestions.textContent,/0.2 batches in stock/);
   const startSection=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Can start');await act(async()=>startSection.querySelector('button').click());await click('Start Batch · 0.5 batches');assert.ok(document.querySelector('.batch-checklist'));await click('Complete Clarify');assert.ok(document.querySelector('.step-done'));assert.ok(document.querySelector('.step-next'));assert.equal(document.querySelectorAll('.batch-checklist .step-details').length,2);assert.ok([...document.querySelectorAll('.step-details')].every(d=>!d.open));assert.match(text(),/✓ ClarifyCompleted/);assert.match(text(),/Filter/);
   // A fresh bartender mounts the same shared run and can operate it.
   await act(async()=>root.render(React.createElement(Component,{staffId:id(101),key:'second'})));await click('In progress');await click('Continue');
@@ -90,7 +92,8 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   await click("Can't continue");assert.match(text(),/Waiting: Waiting for filters/);await click('Resume work');assert.equal(calls.at(-1).kind,'resume');
   loseResponse=true;await click('Complete Filter');assert.match(text(),/Retry same action/);const key=calls.at(-1).key;await click('Retry same action');assert.equal(calls.at(-1).key,key);assert.equal(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(101)),null);
   assert.equal(calls.some(c=>'actor' in c||'request' in c),false);
- }finally{await act(async()=>root.unmount());dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
+  await act(async()=>{dom.window.dispatchEvent(new dom.window.Event('online'));await new Promise(r=>setTimeout(r,400));});assert.ok(sources.slice(0,-1).every(s=>s.closed));
+ }finally{await act(async()=>root.unmount());assert.ok(sources.every(s=>s.closed));dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });
 
 test('workspace service preserves historical stock identity, fixed run version and unknown counts',async()=>{
@@ -138,7 +141,7 @@ for(const scenario of ['complete','missing','rejected','lost-response','refresh-
   if(failRead)throw new Error('read unavailable');
   return {ok:true,status:200,json:async()=>structuredClone(state)};
  };
- const hook=load('lib/bartender/use-workspace.ts',{'./model':model},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,fetch:mockFetch,crypto,AbortController,AbortSignal,setInterval,clearInterval});
+ const hook=load('lib/bartender/use-workspace.ts',{'./model':model,'./synchronize':synchronization},{window:dom.window,document:dom.window.document,sessionStorage:dom.window.sessionStorage,fetch:mockFetch,crypto,AbortController,AbortSignal,setTimeout,clearTimeout,setInterval,clearInterval});
  const Component=load('app/bartender/workspace.tsx',{'@/lib/bartender/model':model,'@/lib/bartender/use-workspace':hook},{crypto}).default;
  const click=async label=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(b,label);assert.ok(!b.disabled);await act(async()=>b.click());};
  try{
@@ -165,3 +168,40 @@ for(const scenario of ['complete','missing','rejected','lost-response','refresh-
  assert.ok(dom.window.document.querySelectorAll('.recipe-actions').length>0);
  assert.match(mobileMarkup('multi'),/Start Batch · 1 batch/);dom.window.close();
  });
+
+test('invalidation coalesces bursts, retains changes during reads/writes and cancels on cleanup',async()=>{
+ let next,blocked=true,reads=0,finish;
+ const sync=synchronization.synchronize(async()=>{reads++;await new Promise(r=>finish=r);},()=>blocked,
+  fn=>{next=fn;return 1;},()=>{next=undefined;});
+ const tick=async()=>{const fn=next;next=undefined;fn?.();await Promise.resolve();};
+ sync.invalidate();sync.invalidate();await tick();assert.equal(reads,0);
+ blocked=false;await tick();assert.equal(reads,1);
+ sync.invalidate();sync.invalidate();finish();await new Promise(r=>setImmediate(r));await tick();assert.equal(reads,2);
+ finish();await Promise.resolve();sync.invalidate();sync.stop();await tick();assert.equal(reads,2);
+});
+
+test('SSE preserves session privacy, subscribes only five INSERT/UPDATE tables and cleans up',async()=>{
+ let registrations=[],status,removed=0;const timers=new Map();let timerId=0;
+ const channel={on(kind,filter,fn){registrations.push({kind,filter,fn});return this;},subscribe(fn){status=fn;return this;}};
+ const streamClient={channel:()=>channel,removeChannel:async()=>{removed++;},realtime:{disconnect(){}}};
+ let access={kind:'staff',staff:{role:'bartender'}};let preview=true;
+ const route=load('app/api/bartender/events/route.ts',{
+ '@supabase/supabase-js':{createClient:()=>streamClient},
+ '@/lib/supabase/server':{createClient:async()=>({auth:{getSession:async()=>({data:{session:{access_token:'private-test-token'}}})}})},
+ '@/lib/supabase/config':{getSupabaseConfig:()=>({url:'https://preview.invalid',publishableKey:'public-test'})},
+ '@/lib/auth/access':{resolveAccess:async()=>access},
+ '@/lib/bartender/environment':{isBartenderPreview:()=>preview},
+ },{Response,ReadableStream,TextEncoder,setTimeout:(fn)=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
+ const controller=new AbortController();const req=new NextRequest('https://preview.invalid/api/bartender/events',{signal:controller.signal});
+ const response=await route.GET(req);assert.equal(response.status,200);
+ assert.equal(registrations.length,10);assert.deepEqual([...new Set(registrations.map(r=>r.filter.table))].sort(),['batch_requests','batch_run_steps','batch_runs','inventory_balances','recipe_operational_settings']);
+ assert.ok(registrations.every(r=>r.filter.schema==='public'&&['INSERT','UPDATE'].includes(r.filter.event)));
+ const reader=response.body.getReader();const decoder=new TextDecoder();let output=decoder.decode((await reader.read()).value);
+ status('SUBSCRIBED');output+=decoder.decode((await reader.read()).value);registrations[0].fn({secret:'must not cross stream'});
+ // timer 1 is connection expiry; timer 2 is coalesced event
+ const emit=timers.get(2);timers.delete(2);emit();output+=decoder.decode((await reader.read()).value);
+ assert.equal(output,'retry: 3000\n\ndata: connected\n\ndata: stale\n\n');
+ await reader.cancel();assert.equal(removed,1);assert.equal(timers.size,0);
+ for(const denied of [{kind:'anonymous'},{kind:'blocked'},{kind:'staff',staff:{role:'management'}}]){access=denied;assert.equal((await route.GET(req)).status,401);}
+ preview=false;assert.equal((await route.GET(req)).status,403);
+});

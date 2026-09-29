@@ -1,5 +1,6 @@
 'use client';
 import { useCallback,useEffect,useRef,useState } from 'react';
+import { synchronize } from './synchronize';
 import type { Availability } from '@/lib/domain/contracts';
 import { nextStep,parseCommand,type Command,type Snapshot,type Version } from './model';
 type Selection={kind:'recipe';id:string}|{kind:'run';id:string};
@@ -18,14 +19,34 @@ export function useWorkspace(staffId:string) {
   if(reading.current&&!force)return;reading.current=true;const generation=++readSequence.current;
   try {const response=await fetch('/api/bartender',{cache:'no-store',signal:AbortSignal.timeout(15000)});const body=await response.json();redirect(body);
    if(!response.ok)throw new Error();if(generation===readSequence.current){setSnapshot(body);setStale(false);}return body as Snapshot;
-  }catch{setStale(true);setMessage('Could not refresh the workspace. Check your connection and retry.');}
-  finally{reading.current=false;setLoading(false);}
+  }catch{if(generation===readSequence.current){setStale(true);setMessage('Could not refresh the workspace. Check your connection and retry.');}}
+  finally{if(generation===readSequence.current){reading.current=false;setLoading(false);}}
  },[redirect]);
  useEffect(()=>{
   try {const saved=sessionStorage.getItem(storageKey+staffId);if(saved)setPending(parseCommand(JSON.parse(saved)));}catch{setMessage('Pending action could not be restored. Check work and stock before producing again.');}
-  void refresh();const timer=setInterval(()=>{if(document.visibilityState==='visible'&&!writing.current&&!completing.current)void refresh();},10000);
-  const visible=()=>{if(document.visibilityState==='visible')void refresh();};document.addEventListener('visibilitychange',visible);
-  return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',visible);};
+  void refresh();
+  const sync=synchronize(()=>refresh(),()=>reading.current||writing.current||completing.current);
+  let events:EventSource|null=null;
+  let reconnect:ReturnType<typeof setTimeout>|undefined;let delay=3000;let disposed=false;
+  const connect=()=>{
+   clearTimeout(reconnect);events?.close();events=null;
+   if(disposed)return;
+   if(document.visibilityState!=='hidden'&&typeof window.EventSource==='function') {
+    events=new window.EventSource('/api/bartender/events');
+    events.onmessage=()=>{delay=3000;sync.invalidate();};
+    events.onerror=()=>{
+     events?.close();events=null;sync.invalidate();
+     reconnect=setTimeout(connect,delay);delay=Math.min(delay*2,30000);
+    }; // Explicit retry also recovers non-200 responses; refetch verifies access.
+   }
+  };
+  connect();
+  // Safety net for missed events, unsupported browsers and access revocation.
+  const timer=setInterval(()=>{if(document.visibilityState!=='hidden')sync.invalidate();},30000);
+  const visible=()=>{connect();if(document.visibilityState!=='hidden')sync.invalidate();};
+  const online=()=>{connect();sync.invalidate();};
+  document.addEventListener('visibilitychange',visible);window.addEventListener('online',online);
+  return()=>{disposed=true;clearTimeout(reconnect);events?.close();sync.stop();clearInterval(timer);document.removeEventListener('visibilitychange',visible);window.removeEventListener('online',online);};
  },[refresh,staffId]);
  const selectedVersion=selection?.kind==='recipe'?snapshot?.versions.find(v=>v.id===selection.id):undefined;
  const selectedRun=selection?.kind==='run'?snapshot?.runs.find(r=>r.id===selection.id)??snapshot?.runHistory?.find(r=>r.id===selection.id):undefined;

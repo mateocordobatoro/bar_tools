@@ -32,12 +32,12 @@ export default function Workspace({staffId}:{staffId:string}) {
  const locked=busy||pending!==null||stale;
  return <>
   <nav className="work-tabs" aria-label="Workspace sections">{['Prep','In progress','Batch Stock'].map(t=><button key={t} disabled={busy} aria-current={tab===t?'page':undefined} onClick={()=>{setTab(t);setSelection(null);}}>{t}</button>)}</nav>
-  <div className="work-toolbar"><small>Stock updates automatically</small><button className="secondary" disabled={busy} onClick={()=>void refresh()}>Refresh</button></div>
+  <div className="work-toolbar"><small>Stock updates automatically</small>{stale&&<button className="secondary" disabled={busy} onClick={()=>void refresh()}>Retry connection</button>}</div>
   {message&&<p role="status" className="notice">{message}</p>}
   {busy&&<p role="status" className="saving">Saving… Please wait.</p>}
   {pending&&!busy&&<div className="notice"><p>An action needs confirmation. Retry this exact action before starting another.</p><button disabled={busy} onClick={()=>void act(pending)}>Retry same action</button></div>}
   {loading&&<p role="status">Loading recipes and stock…</p>}
-  {!loading&&!snapshot&&<p>Workspace unavailable. Use Refresh to try again.</p>}
+  {!loading&&!snapshot&&<p>Workspace unavailable. Reconnecting automatically.</p>}
   {snapshot&&selection&&detailVersion?<section className="work-detail" aria-label="Recipe details">
    <button className="secondary" disabled={busy} onClick={()=>setSelection(null)}>Back to {tab}</button>
    <h2 ref={detailHeading} tabIndex={-1} className="detail-heading">{recipeName(detailVersion)}</h2><small>{detailVersion.production_mode==='SIMPLE'?'Simple batch':'Multistep batch'}</small>
