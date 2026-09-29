@@ -52,17 +52,18 @@ export function useWorkspace(staffId:string,diagnostics=false) {
    trace('invalidate',{...cause});sync.invalidate();
   };
   let events:EventSource|null=null;
-  let reconnect:ReturnType<typeof setTimeout>|undefined;let delay=3000;let disposed=false;
+  let reconnect:ReturnType<typeof setTimeout>|undefined;let delay=3000;let disposed=false;let attempts=0;
   const close=()=>{
    const previous=events;events=null; // revoke authority before synchronous EventSource.close()
-   if(previous){previous.close();trace('disconnect-settled',{connectionGeneration:connectionGeneration.current});}
-   connectionGeneration.current++;
+   if(previous){previous.close();trace('disconnect-settled',{connectionGeneration:connectionGeneration.current});connectionGeneration.current++;}
   };
   const connect=()=>{
-   clearTimeout(reconnect);close();
-   if(disposed)return;
+   if(disposed||events)return;
+   clearTimeout(reconnect);
    if(document.visibilityState!=='hidden'&&typeof window.EventSource==='function') {
+    if(connectionGeneration.current===0)connectionGeneration.current=1;
     const generation=connectionGeneration.current;
+    const replacement=attempts++>0;let connected=false;
     const source=new window.EventSource('/api/bartender/events');events=source;
     let connectionId:string|undefined;
     const isCurrent=()=>!disposed&&events===source&&generation===connectionGeneration.current;
@@ -84,11 +85,17 @@ export function useWorkspace(staffId:string,diagnostics=false) {
     });
     source.onmessage=event=>{
      if(!isCurrent()||!['connected','stale'].includes(event.data))return;
-     delay=3000;invalidate(cause(event.data==='stale'?'sse-stale':'reconnect-recovery'));
+     delay=3000;
+     if(event.data==='stale')invalidate(cause('sse-stale'));
+     else if(!connected){
+      connected=true;
+      // Initial subscription closes the initial-read/subscribe gap without claiming a reconnect.
+      invalidate(cause(replacement?'reconnect-recovery':'initial-load'));
+     }
     };
     source.onerror=()=>{
      if(!isCurrent())return;
-     close();invalidate({trigger:'reconnect-recovery'});trace('reconnect-scheduled',{delay,connectionGeneration:generation});
+     close();trace('reconnect-scheduled',{delay,connectionGeneration:generation});
      reconnect=setTimeout(connect,delay);delay=Math.min(delay*2,30000);
     };
    }
@@ -96,8 +103,9 @@ export function useWorkspace(staffId:string,diagnostics=false) {
   connect();
   // Remains active while SSE is healthy; independent attribution begins at page load.
   const timer=setInterval(()=>{if(document.visibilityState!=='hidden')invalidate({trigger:'polling'});},30000);
-  const visible=()=>{connect();if(document.visibilityState!=='hidden')invalidate({trigger:'reconnect-recovery'});};
-  const online=()=>{connect();invalidate({trigger:'reconnect-recovery'});};
+  // Visibility/online notifications must not replace a healthy source.
+  const visible=()=>{if(document.visibilityState!=='hidden')connect();};
+  const online=()=>{connect();};
   document.addEventListener('visibilitychange',visible);window.addEventListener('online',online);
   return()=>{trace('cleanup');disposed=true;clearTimeout(reconnect);close();sync.stop();causes.current.clear();++readSequence.current;reading.current=false;clearInterval(timer);document.removeEventListener('visibilitychange',visible);window.removeEventListener('online',online);};
  },[refresh,staffId,trace,diagnostics]);

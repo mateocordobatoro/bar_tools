@@ -9,6 +9,7 @@ function load(path,mocks={},globals={}){
  const js=ts.transpileModule(readFileSync(new URL('../'+path,import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  const module={exports:{}};vm.runInNewContext(`(function(require,module,exports){${js}\n})`,{process,URL,console,Intl,...globals})(n=>n in mocks?mocks[n]:n==='server-only'?{}:require(n),module,module.exports);return module.exports;
 }
+const metadata=load('lib/bartender/realtime-metadata.ts');
 const synchronization=load('lib/bartender/synchronize.ts',{}, {setTimeout,clearTimeout});
 const model=load('lib/bartender/model.ts');const environment=load('lib/bartender/environment.ts');
 import {id,sample,fixture} from './bartender-fixtures.mjs';
@@ -187,31 +188,34 @@ test('invalidation coalesces bursts, retains changes during reads/writes and can
 });
 
 test('SSE preserves session privacy, subscribes only five INSERT/UPDATE tables and cleans up',async()=>{
- let registrations=[],status,removed=0;const timers=new Map();let timerId=0;
+ let heartbeat;let registrations=[],status,removed=0;const timers=new Map();let timerId=0;
  const channel={on(kind,filter,fn){registrations.push({kind,filter,fn});return this;},subscribe(fn){status=fn;return this;}};
  let releaseRemoval,releaseDisconnect,disconnectStarted=false;
  const streamClient={channel:()=>channel,removeChannel:()=>{removed++;return new Promise(r=>releaseRemoval=r);},realtime:{disconnect(){disconnectStarted=true;return new Promise(r=>releaseDisconnect=r);}}};
  let access={kind:'staff',staff:{role:'bartender'}};let preview=true;
  const route=load('app/api/bartender/events/route.ts',{
+ '@/lib/bartender/realtime-metadata':metadata,
  '@supabase/supabase-js':{createClient:()=>streamClient},
  '@/lib/supabase/server':{createClient:async()=>({auth:{getSession:async()=>({data:{session:{access_token:'private-test-token'}}})}})},
  '@/lib/supabase/config':{getSupabaseConfig:()=>({url:'https://preview.invalid',publishableKey:'public-test'})},
  '@/lib/auth/access':{resolveAccess:async()=>access},
  '@/lib/bartender/environment':{isBartenderPreview:()=>preview},
- },{Response,ReadableStream,TextEncoder,setTimeout:(fn)=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
+ },{Response,ReadableStream,TextEncoder,setInterval:(fn,ms)=>{assert.equal(ms,15000);heartbeat=fn;return 999;},clearInterval:()=>{heartbeat=null;},setTimeout:(fn,ms)=>{assert.equal(ms,250,'no application lifetime timer');timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
  const controller=new AbortController();const req=new NextRequest('https://preview.invalid/api/bartender/events',{signal:controller.signal});
  const response=await route.GET(req);assert.equal(response.status,200);
  assert.equal(registrations.length,10);assert.deepEqual([...new Set(registrations.map(r=>r.filter.table))].sort(),['batch_requests','batch_run_steps','batch_runs','inventory_balances','recipe_operational_settings']);
  assert.ok(registrations.every(r=>r.filter.schema==='public'&&['INSERT','UPDATE'].includes(r.filter.event)));
  const reader=response.body.getReader();const decoder=new TextDecoder();let output=decoder.decode((await reader.read()).value);
- status('SUBSCRIBED');output+=decoder.decode((await reader.read()).value);registrations[0].fn({secret:'must not cross stream'});
- // timer 1 is connection expiry; timer 2 is coalesced event
- const emit=timers.get(2);timers.delete(2);emit();output+=decoder.decode((await reader.read()).value);
- assert.equal(output,'retry: 3000\n\ndata: connected\n\ndata: stale\n\n');
+ status('SUBSCRIBED');output+=decoder.decode((await reader.read()).value);
+ for(let elapsed=15000;elapsed<=90000;elapsed+=15000){heartbeat();output+=decoder.decode((await reader.read()).value);assert.equal(removed,0);assert.equal(timers.size,0,'healthy stream has no expiry even after 45s');}
+ registrations[0].fn({secret:'must not cross stream'});
+ // The only timeout is event coalescing.
+ const emit=timers.get(1);timers.delete(1);emit();output+=decoder.decode((await reader.read()).value);
+ assert.equal(output,'retry: 3000\n\ndata: connected\n\n'+': keepalive\n\n'.repeat(6)+'data: stale\n\n');
  const cancellation=reader.cancel();let settled=false;cancellation.then(()=>settled=true);
  await new Promise(r=>setImmediate(r));assert.equal(disconnectStarted,false);assert.equal(settled,false);releaseRemoval();
  await new Promise(r=>setImmediate(r));assert.equal(disconnectStarted,true);assert.equal(settled,false);releaseDisconnect();await cancellation;
- assert.equal(removed,1);assert.equal(timers.size,0);
+ assert.equal(removed,1);assert.equal(heartbeat,null);assert.equal(timers.size,0);
  for(const denied of [{kind:'anonymous'},{kind:'blocked'},{kind:'staff',staff:{role:'management'}}]){access=denied;assert.equal((await route.GET(req)).status,401);}
  preview=false;assert.equal((await route.GET(req)).status,403);
 });
@@ -223,12 +227,13 @@ for(const terminal of ['CHANNEL_ERROR','TIMED_OUT','CLOSED'])test(`Realtime ${te
   removeChannel:async()=>{removed++;},realtime:{disconnect(){}}
  });
  const route=load('app/api/bartender/events/route.ts',{
-  '@supabase/supabase-js':{createClient:makeClient},
+  '@/lib/bartender/realtime-metadata':metadata,
+ '@supabase/supabase-js':{createClient:makeClient},
   '@/lib/supabase/server':{createClient:async()=>({auth:{getSession:async()=>({data:{session:{access_token:'do-not-log-token'}}})}})},
   '@/lib/supabase/config':{getSupabaseConfig:()=>({url:'https://preview.invalid',publishableKey:'do-not-log-key'})},
   '@/lib/auth/access':{resolveAccess:()=>new Promise(r=>releaseAuth=()=>r({kind:'staff',staff:{role:'bartender'}}))},
   '@/lib/bartender/environment':{isBartenderPreview:()=>true},
- },{Response,ReadableStream,TextEncoder,process:{env:{BARTENDER_REALTIME_DIAGNOSTICS:'1'}},console:{info:(...v)=>logs.push(v)},
+ },{Response,ReadableStream,TextEncoder,setInterval:()=>999,clearInterval:()=>{},process:{env:{BARTENDER_REALTIME_DIAGNOSTICS:'1'}},console:{info:(...v)=>logs.push(v)},
   setTimeout:fn=>{timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
  const req=new NextRequest('https://preview.invalid/api/bartender/events');
  const pending=route.GET(req);await new Promise(r=>setImmediate(r));
@@ -236,9 +241,9 @@ for(const terminal of ['CHANNEL_ERROR','TIMED_OUT','CLOSED'])test(`Realtime ${te
  const c=channels[0];assert.ok(c.registrations.some(r=>r.filter.schema==='public'&&r.filter.table==='batch_runs'&&r.filter.event==='INSERT'));
  c.status('SUBSCRIBED');
  const insert=c.registrations.find(r=>r.filter.table==='batch_runs'&&r.filter.event==='INSERT');
- insert.fn({commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(77),password:'sensitive-row'},old:{token:'secret'}});
- c.registrations.find(r=>r.filter.table==='batch_run_steps'&&r.filter.event==='INSERT').fn({commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(78),secret:'sensitive-step'}});
- assert.equal(timers.size,2,'one expiry and one coalesced invalidation');
+ insert.fn({schema:'public',table:'batch_runs',eventType:'INSERT',commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(77),password:'sensitive-row'},old:{token:'secret'}});
+ c.registrations.find(r=>r.filter.table==='batch_run_steps'&&r.filter.event==='INSERT').fn({schema:'public',table:'batch_run_steps',eventType:'INSERT',commit_timestamp:'2026-09-29T12:00:00Z',new:{id:id(78),secret:'sensitive-step'}});
+ assert.equal(timers.size,1,'only one coalesced invalidation, no expiry');
  const emit=[...timers.entries()].at(-1);timers.delete(emit[0]);emit[1]();c.status(terminal);
  const text=await response.text();assert.equal((text.match(/data: stale/g)||[]).length,1);
  const entries=logs.map(l=>JSON.parse(l[1]));
@@ -271,23 +276,59 @@ test('refresh attribution starts before SSE; polling, bursts, user action and re
   await act(async()=>root.render(React.createElement(Probe)));assert.equal(reads,1);assert.equal(applied().causes[0].trigger,'initial-load');
   await act(async()=>[...intervals.values()][0]());await flush();assert.equal(reads,2);assert.equal(applied().causes[0].trigger,'polling','polling traces exist without any SSE handshake');
   const first=sources.at(-1);
+  await act(async()=>first.onmessage({data:'connected'}));await flush();assert.equal(applied().causes[0].trigger,'initial-load');
+  const idleReads=reads;await act(async()=>{first.onmessage({data:': keepalive'});first.onmessage({data:'connected'});});await flush();assert.equal(reads,idleReads);assert.equal(sources.at(-1),first);
   await act(async()=>{first.handlers.diagnostic({data:JSON.stringify({phase:'database-event',connection:id(70),status:'SUBSCRIBED',schema:'public',table:'batch_runs',eventType:'INSERT',recordId:id(71),eventTimestamp:'2026-09-29T12:00:00Z',receivedAt:'2026-09-29T12:00:01Z',secret:'never-log'})});first.onmessage({data:'stale'});first.onmessage({data:'stale'});first.onmessage({data:'stale'});});
-  await flush();assert.equal(reads,3,'related signals produce one read');assert.equal(applied().causes.length,1);assert.equal(applied().causes[0].trigger,'sse-stale');assert.equal(applied().causes[0].connectionId,id(70));
+  await flush();assert.equal(reads,4,'related signals produce one read');assert.equal(applied().causes.length,1);assert.equal(applied().causes[0].trigger,'sse-stale');assert.equal(applied().causes[0].connectionId,id(70));
   assert.ok(logs.some(l=>l.phase==='server'&&l.recordId===id(71)&&l.table==='batch_runs'));assert.ok(!JSON.stringify(logs).includes('never-log'));
   await act(async()=>{first.onmessage({data:'stale'});[...intervals.values()][0]();});await flush();assert.deepEqual(Array.from(applied().causes,c=>c.trigger).sort(),['polling','sse-stale'],'mixed causes stay explicit');
   await act(async()=>latest.refresh());assert.equal(applied().causes[0].trigger,'user-action');
+  const healthyGeneration=logs.filter(l=>l.phase==='connect').at(-1).connectionGeneration;
+  for(let elapsed=30000;elapsed<=90000;elapsed+=30000){
+   await act(async()=>{[...intervals.values()][0]();dom.window.dispatchEvent(new dom.window.Event('online'));dom.window.document.dispatchEvent(new dom.window.Event('visibilitychange'));});await flush();
+   assert.equal(applied().causes[0].trigger,'polling');assert.equal(sources.length,1);assert.equal(first.closed,undefined);
+  }
+  assert.ok(!logs.some(l=>l.trigger==='reconnect-recovery'));
+  assert.equal(logs.filter(l=>l.phase==='connect').at(-1).connectionGeneration,healthyGeneration);
   const before=reads;hold=true;
   await act(async()=>first.onmessage({data:'stale'}));await flush();assert.equal(reads,before+1);
-  await act(async()=>dom.window.dispatchEvent(new dom.window.Event('online')));
+  await act(async()=>{first.onerror();first.onerror();});
+  assert.equal(sources.length,1,'disconnect does not create a source until retry');
+  await act(async()=>{const retry=[...timers.entries()].find(([,v])=>v.ms===3000);timers.delete(retry[0]);retry[1].fn();});
   const second=sources.at(-1);assert.notEqual(first,second);assert.ok(first.closed);
   const replacementCount=sources.length;
   await act(async()=>{first.onmessage({data:'stale'});first.onerror();first.handlers.diagnostic({data:'{}'});});
   assert.equal(sources.length,replacementCount);assert.ok(!second.closed);
   await act(async()=>release());assert.ok(logs.some(l=>l.phase==='refetch-discarded'),'old-generation in-flight response cannot apply');
   await act(async()=>second.onmessage({data:'connected'}));await flush();assert.equal(applied().causes.at(-1).trigger,'reconnect-recovery');
-  assert.ok(applied().causes.some(c=>c.connectionGeneration>1));
+  assert.equal(applied().causes[0].connectionGeneration,healthyGeneration+1);
+  const afterRecovery=reads;await act(async()=>second.onmessage({data:'connected'}));await flush();assert.equal(reads,afterRecovery,'one recovery per replacement handshake');
   await act(async()=>second.onerror());assert.ok(second.closed);
   await act(async()=>{const retry=[...timers.entries()].find(([,v])=>v.ms===3000);assert.ok(retry);timers.delete(retry[0]);retry[1].fn();});
   assert.equal(sources.length,replacementCount+1);assert.ok(!sources.at(-1).closed);
  }finally{await act(async()=>root.unmount());assert.ok(sources.every(s=>s.closed));assert.equal(timers.size,0);assert.equal(intervals.size,0);dom.window.close();Object.assign(globalThis,previous);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
+});
+
+// Feed synthetic wire messages through the installed SDK without opening a socket.
+// This checks actual callback transformation, rather than a handwritten callback mock.
+for(const event of ['INSERT','UPDATE'])test(`installed SDK ${event} callback extracts safe metadata`,async()=>{
+ const {createClient}=await import('@supabase/supabase-js');
+ const client=createClient('https://offline.invalid','synthetic-key',{auth:{persistSession:false,autoRefreshToken:false}});
+ const channel=client.channel('offline-metadata');let received;
+ channel.on('postgres_changes',{schema:'public',table:'batch_runs',event},p=>received=p);
+ channel._updatePostgresBindings([{id:1,schema:'public',table:'batch_runs',event}],()=>{});
+ const wire={ids:[1],data:{schema:'public',table:'batch_runs',type:event,commit_timestamp:'2026-09-29T20:00:00Z',columns:[{name:'id',type:'uuid'},{name:'secret',type:'text'}],record:{id:id(77),secret:'must-not-log'},old_record:{id:id(77)},errors:null}};
+ channel.channelAdapter.getChannel().trigger('postgres_changes',wire);
+ assert.ok(received);assert.equal(received.new.id,id(77));assert.equal(received.commit_timestamp,wire.data.commit_timestamp);
+ for(const payload of [received,wire]){
+  const safe=metadata.realtimeMetadata(payload,'batch_runs',event);
+  assert.equal(safe.recordId,id(77));assert.equal(safe.eventTimestamp,'2026-09-29T20:00:00.000Z');
+  assert.deepEqual(Object.keys(safe).sort(),['eventTimestamp','eventType','recordId','schema','table']);assert.ok(!JSON.stringify(safe).includes('must-not-log'));
+ }
+ for(const timestamp of [undefined,null,'invalid'])assert.equal(metadata.realtimeMetadata({...received,commit_timestamp:timestamp},'batch_runs',event).eventTimestamp,null);
+ assert.equal(metadata.realtimeMetadata({...received,new:{id:'not-a-uuid'}},'batch_runs',event).recordId,null);
+ assert.equal(metadata.realtimeMetadata({...received,new:{},old:{id:id(77)}},'batch_runs',event).recordId,null,'do not invent identity from a stale old row');
+ assert.equal(metadata.realtimeMetadata({...received,table:'private_audit'},'batch_runs',event).recordId,null);
+ for(const [table,column] of [['inventory_balances','account_id'],['recipe_operational_settings','recipe_id']])assert.equal(metadata.realtimeMetadata({...received,table,new:{[column]:id(78)}},table,event).recordId,id(78));
+ await client.removeAllChannels();
 });

@@ -355,3 +355,331 @@ reconnect replacement, cancellation awaiting removal/disconnect and cleanup.
 Ready locally for an authorized instrumented Preview release and then hosted
 validation. This is not hosted validation itself. No commit, push, deploy, hosted
 configuration change, new run or other domain mutation was performed.
+
+## Diagnostic Preview release — 2026-09-29
+
+Commit: 711081c0a9bf4542971d2ba8b610f8993a20fa74.
+Branch pushed: feat/supabase-foundation. Exactly six approved diagnostic files
+included; all unrelated pending files remained unstaged and uncommitted.
+Isolated staged-tree checks passed: 40 bartender/Realtime/UI/API, 32 Auth,
+typecheck, build, git diff --check. GitHub Actions success:
+https://github.com/mateocordobatoro/bar_tools/actions/runs/36604571525
+
+Vercel deployment DgCvfL2fVu9Z6SURE4bxrEqb2m6C reached Ready as Preview:
+https://bar-tools-nuw07byyy-mateo-personal2.vercel.app
+Stable alias:
+https://bar-tools-git-feat-supabase-foundation-mateo-personal2.vercel.app/bartender
+Production branch was confirmed main. Preview Supabase URL was verified as
+https://mfwoutniamoldcieoqvc.supabase.co. Production settings were not modified.
+BARTENDER_REALTIME_DIAGNOSTICS=1 was added as a non-secret Config variable scoped
+ONLY to Preview branch feat/supabase-foundation, with Production and Development
+unselected. No Supabase settings or data were changed.
+
+Hosted read-only observations:
+- Existing original bartender session loaded PREP and retained synthetic state.
+- Authenticated navigation to /management redirected to /bartender; session persisted.
+- Vercel runtime logs confirmed /api/bartender/events status SUBSCRIBED, connection
+  06d3df4b-e020-4858-b832-090dfc9626d4 at 2026-09-29T17:26:06.396Z.
+- Workspace reads were logged at 17:26:03.987, 17:26:07.135 and 17:26:34.344 UTC.
+  This is consistent with initial load, connection recovery and 30-second fallback,
+  but request timestamps alone do not prove client trigger attribution.
+- Client diagnostics emitted from initial load, but the browser inspection tool
+  renders their object arguments only as `[bartender-sync] Object`. Therefore
+  trigger fields/generations cannot be independently inspected with this tool.
+  Server logs already use JSON strings and their sanitized status fields are visible.
+- No new database event was deliberately caused. sse-stale and safe record IDs/commit
+  timestamps were NOT validated on a live event. Their local tests passed.
+
+Blocking observability issue: serialize the allowlisted client diagnostic object
+as JSON text so the browser log collector retains attribution fields. This is a
+proposed follow-up, not included in this already published commit. Until it is
+resolved and the initial/polling/reconnect traces are inspected, do not declare
+hosted diagnostic readiness or authorize a test mutation based on this release.
+No new users/request/run, inventory/step operation, merge, Production deployment
+or database mutation was performed. This release-result entry remains local and
+uncommitted; no second commit/push was made.
+
+## Diagnostic serialization release and read-only smoke — 2026-09-29
+
+The text-only log collector limitation above is resolved by commit
+1496dd4f1ff47f8278060e0c9c7281162ce1362a on feat/supabase-foundation.
+Only lib/bartender/use-workspace.ts and scripts/bartender.test.mjs changed:
+JSON serialization plus a regression assertion for a string log argument.
+Isolated staged-tree validation passed: 40 bartender/UI/API/Realtime tests,
+32 Auth tests, typecheck, build and diff checks. GitHub Actions success:
+https://github.com/mateocordobatoro/bar_tools/actions/runs/36605669346
+
+Vercel 73JLijUu9F8nEsY3pM2MT8tZeXQL is Ready, environment Preview, commit 1496dd4.
+Immutable URL: https://bar-tools-4yfr69k50-mateo-personal2.vercel.app
+Stable URL: https://bar-tools-git-feat-supabase-foundation-mateo-personal2.vercel.app/bartender
+The existing branch-only diagnostic flag was retained. No further environment,
+Supabase or Production changes were made.
+
+Hosted JSON traces (UTC, browser clock):
+- 17:48:26.781 initial-load workspace refetch-start, applied 17:48:27.653.
+- 17:48:27.331 server SUBSCRIBED, connection 02762901-ee3c-4211-b548-9bfaecf5922a,
+  client generation 1; server receivedAt 17:48:27.391 (different clock).
+- 17:48:27.696 reconnect-recovery refetch-start with generation/connection,
+  applied 17:48:28.373.
+- 17:48:51.163 user-action availability read after View Recipe, applied
+  17:48:51.862. No Start Batch control was used.
+- 17:48:56.783 polling invalidation (30 seconds after initial load), workspace
+  refetch-start 17:48:57.135, applied 17:48:58.514. Selected availability also
+  refetched with polling attribution. No manual refresh triggered this cycle.
+- 17:49:12.130 normal 45-second server cleanup observed; another connection
+  e9823299-918b-416f-b6ce-a02340b348ac reached SUBSCRIBED at 17:49:16.739,
+  client generation 3. No CHANNEL_ERROR/TIMED_OUT was required to induce recovery.
+
+Reload retained the original bartender session. Visiting /management redirected
+back to /bartender on this release. PREP loaded the retained request/run state.
+Observed diagnostic entries contain only the allowlisted lifecycle/attribution
+metadata. No credentials or full rows were present in the observed traces.
+
+No domain write was performed, so no new sse-stale event/record ID/commit timestamp
+was claimed as hosted-tested. Exact run/step INSERT metadata and sse-stale attribution
+remain covered locally and are the target of the separately authorized future
+single-RPC test. Use client timestamps for ordering polling versus SSE application;
+server and browser wall clocks are not assumed identical.
+
+Diagnostic readiness: sufficient to proceed to a controlled INSERT test AFTER
+explicit authorization. It is not proof that live run INSERT delivery passes.
+No remaining hosted-only observability blocker found in this read-only smoke.
+No new users, requests, runs, fixture changes, inventory operations, merge or
+Production deployment. These result notes remain local/uncommitted.
+
+
+## Single authorized run-start observation — 2026-09-29
+
+Outcome: PARTIAL / STOP. Exactly one authorized start was performed. No retry,
+step completion, blocker, cleanup, new provisioning, commit, push or deployment.
+Preview only (mfwoutniamoldcieoqvc); Production was not accessed.
+Vercel Preview deployment 73JLijUu9F8nEsY3pM2MT8tZeXQL was Ready and linked
+both the stable feature hostname and commit 1496dd4f1ff47f8278060e0c9c7281162ce1362a.
+
+The existing original Step 33 bartender session was used in two tabs: one writer,
+one passive observer. These were two sessions/views of the same identity, not a
+new test using a different bartender identity. The writer selected the existing
+BTRT multistep version and 1 batch, then clicked the final Start Batch exactly once.
+
+Read-only before/after snapshots via the private verify-full Preview psql service
+confirmed all eleven verifier assertions passed:
+- New run: 6d38ce08-19e8-4825-8386-37339fb42b82; IN_PROGRESS; 1 batch.
+- Version: 44ea8da4-c524-46cb-b183-7c653d351637 (selected existing fixture).
+- Actor profile: 06b46cb1-b87d-45d4-8b5c-36d58fd2d889.
+- Fresh operation key: 754a7d36-0a7d-423a-bbbc-014bd36ba206.
+- Two new PENDING steps: 3c1cd1b5-361a-4108-af5c-9638d41e7d25 and
+  5a62c116-0c66-4e2b-949b-c0039d920e76.
+- Retained old run unchanged; existing profiles unchanged.
+- Raw ingredient balance 100 and stock balance 0, both revision 1, unchanged.
+- Request df2f197b-32e7-4944-a7cd-8270fe43e34b remains OPEN, quantity 1;
+  fulfillment records remain empty. New run has the normal automatic association.
+- Exactly the five approved operational publication members remain present.
+
+Writer trace (client UTC timestamps, connection generation 1,
+connection f6e87ec2-a3b2-4f7f-93c7-c5e6dca18872):
+
+| Time | Evidence |
+| --- | --- |
+| 20:49:27.375 | SUBSCRIBED |
+| 20:49:54.843 | user-action workspace refetch-start |
+| 20:49:54.881 | public.batch_runs INSERT; recordId=null; eventTimestamp=null; server receivedAt=20:49:54.941 |
+| 20:49:54.891 | Two public.batch_run_steps INSERT diagnostics, each recordId=null/eventTimestamp=null; receivedAt=20:49:54.941 |
+| 20:49:55.178 | One coalesced sse-stale invalidation |
+| 20:49:55.348 | user-action workspace refetch-applied |
+| 20:49:55.530 | sse-stale-only workspace refetch-start, read generation 4 |
+| 20:49:55.953 | sse-stale-only workspace refetch-applied |
+| 20:49:56.845 | polling invalidation |
+| 20:49:57.197 | polling workspace refetch-start |
+
+The SSE-only read started 1.315 seconds and finished 0.892 seconds before the
+writer polling invalidation. Three related event diagnostics coalesced into one
+SSE invalidation/read; no duplicate run was created. The writer's initial UI update
+cannot be attributed exclusively to SSE because its direct user-action read applied
+first. Record UUID and commit timestamp were NOT successfully captured from the
+Realtime payload. Do not substitute the read-only database UUID for event evidence.
+
+Passive observer (generation 1, connection 2e11b12a-b670-4e26-9a8d-fa3e1b4040aa):
+SUBSCRIBED 20:49:08.951; polling 20:49:37.345, read applied 20:49:38.259;
+next polling boundary approximately 20:50:07.345. Normal 45-second server expiry
+occurred at 20:49:53.654, before event delivery to the writer. Recovery read started
+20:49:54.006 and applied 20:49:54.605. New generation 3, connection
+ ae95fa6a-d377-4371-a3f5-6f878f4b2de8, subscribed 20:49:56.999; its recovery
+read applied 20:49:57.888. Observer PREP then showed 2 batches underway without
+manual refresh. No database-event or sse-stale trace was captured on this observer.
+Its update is explained by reconnect-recovery, not polling or proven SSE delivery.
+The DOM was not sampled between the two recovery reads, so which recovery read
+first displayed the run was not established.
+
+Limitations and stop condition:
+- The observer was subscribed when checked before the click, but expired during
+  the execution window. The pre-write check did not ensure sufficient lifetime
+  headroom. Cross-tab SSE-only UI attribution therefore did not pass.
+- Writer INSERT callbacks and SSE refetch are confirmed, but safe event record ID
+  and commit timestamp are null. Their extraction requires local investigation;
+  this observation alone does not establish whether the SDK payload shape or
+  diagnostic extraction caused the missing fields. Do not log full payloads.
+- This is not full Realtime validation or approval of a live/reactive baseline.
+  Preserve the new run and all fixtures. No further mutation is authorized.
+- Next work should first investigate the safe metadata extraction locally and
+  improve the observation window around reconnect expiry. Any additional hosted
+  write requires separate explicit approval.
+
+Private read-only evidence files: /tmp/bar-tools-one-run-observation/before.json,
+after.json, verification.json. No credentials are included. Results documented
+locally only; no source behavior was modified.
+
+## Local-only metadata/lifecycle diagnosis — 2026-09-29
+
+No hosted access or mutation in this phase. Retain run
+6d38ce08-19e8-4825-8386-37339fb42b82 and all existing fixtures.
+The writer's INSERT -> sse-stale -> authoritative read before polling is proven.
+Its earlier user-action read means SSE was not proven to cause the *first* paint.
+The outstanding scenario remains a different bartender's change delivered to a
+stable passive observer via SSE, with no recovery/polling explanation.
+
+### Null fields: established facts and uncertainty
+
+Installed and lockfile versions match: supabase-js/realtime-js 2.116.0,
+@supabase/phoenix 0.4.5. The installed RealtimeChannel transform takes the wire
+`{ids, data}` envelope and supplies the registered callback with:
+`schema`, `table`, `eventType`, `commit_timestamp`, `new`, `old`, `errors`.
+An offline test feeds synthetic INSERT and UPDATE wire messages through this
+actual installed SDK channel/transform/filter/callback path without subscribing
+or opening a socket. Both produce new.id and commit_timestamp correctly.
+
+Consequently, the exact cause of hosted recordId/eventTimestamp=null is NOT
+established locally. The prior hosted logging discarded payload shape. We cannot
+recover that evidence without a future event, and must not claim a reproduced
+SDK regression or that these changes conclusively fix the hosted nulls.
+
+New helper accepts only matching public table/event metadata in either:
+- Normalized callback: new.id (new.account_id for inventory_balances,
+  new.recipe_id for recipe_operational_settings), commit_timestamp,
+  schema/table/eventType.
+- Documented wire envelope: data.record.<same primary-key column>,
+  data.commit_timestamp, data.schema/table/type, with an ids array.
+
+Only a UUID is retained as recordId. INSERT and UPDATE both use the new record;
+we do not borrow an old row ID. Unknown/mismatched shapes return null metadata.
+Only a valid supplied commit_timestamp becomes eventTimestamp. It explicitly
+means database commit time, never receipt time. receivedAt is separately generated
+on the SSE server and timestamp on the browser. No full row, arbitrary field,
+credential or raw error is logged. No dependency version was changed.
+
+### Observer reconnect cause
+
+The route deliberately executes setTimeout(dispose, 45000). Its subscribe receive
+time 20:49:08.713 and cleanup receive time 20:49:53.713 differ by exactly 45s.
+Cleanup reported SUBSCRIBED, not CHANNEL_ERROR/TIMED_OUT. This is affirmative
+evidence of normal application-request expiry; no evidence supports Vercel timeout,
+Auth refresh, browser visibility or stale-generation protection as the initiating
+cause. The route exports Node runtime/maxDuration=60. Vercel's documented duration
+includes time spent streaming; heartbeats do not extend it.
+
+Server cleanup revokes authority, clears debounce/expiry/heartbeat, removes the
+abort listener, removes the channel, and disconnects its socket. Response EOF leads
+to EventSource.onerror; the client explicitly closes that source (cancelling native
+retry), revokes its generation, performs a recovery read, and opens a replacement
+after 3s. Later failures back off to 30s. Browser close is synchronous; server
+transport disposal is asynchronous and is not acknowledged to the browser. Existing
+source/generation guards remain necessary even if server cleanup overlaps.
+
+Auth is reverified on each route connection. The captured session token is not
+refreshed in this dedicated Realtime client. Existing middleware/session handling
+remains unchanged. Request abort/cancel and terminal channel status also dispose
+the stream, but were not observed as this event's cause.
+
+### Local changes
+
+- Added 15s SSE `: keepalive` comments while idle. No application data and no
+  message/invalidation event. They can help idle transports but do not fix the
+  deliberate 45s gap. No lifetime, runtime setting or retry delay was increased.
+- First connected acknowledgement is now attributed initial-load (also repairs
+  the initial-read/subscription gap). Only replacement connections use
+  reconnect-recovery. Duplicate connected acknowledgements are ignored.
+- Polling remains every 30s when visible, even with healthy SSE. SSE/recovery,
+  user-action and polling causes remain separate; coalesced causes remain explicit.
+- Old-source callbacks and obsolete in-flight SSE reads remain rejected.
+
+Files: app/api/bartender/events/route.ts, lib/bartender/realtime-metadata.ts,
+lib/bartender/use-workspace.ts, scripts/bartender.test.mjs, this document.
+
+Validation: 42 Realtime/UI/API tests, 32 Auth tests, typecheck, production build,
+and git diff --check pass locally. Tests cover actual SDK INSERT/UPDATE transforms,
+wire fallback, absent/invalid timestamp, invalid UUID, alternate primary keys,
+metadata mismatch rejection, idle keepalives preserving the channel, cleanup,
+initial vs replacement handshake, stale callbacks/reads, SSE/poll attribution and
+related-event coalescing. These tests do not reproduce Vercel idle behavior or
+prove a hosted payload fix.
+
+### Future observer proof procedure (not executed or newly authorized)
+
+Use distinct existing synthetic bartender identities in writer and observer sessions.
+Before any write, verify observer visible, SUBSCRIBED, stable generation N and
+connection UUID. Record subscribe/receive time, most recent poll and the next 30s
+boundary. Wait for all initial/recovery/poll reads to settle. Require at least 20s
+before the route's scheduled expiry and 15s before next poll; otherwise wait for
+another window WITHOUT writing. Execute only once while those conditions still hold.
+Capture matching run UUID + supplied commit time on generation N, sse-stale-only
+read and UI application before polling, with no generation change or recovery cause.
+Abort attribution if a disconnect occurs; preserve data and never repeat a write.
+
+A further explicitly authorized single mutation is still needed for the remaining
+cross-identity observer proof, after diagnostic code publication is separately
+approved. No new write is authorized by this local diagnosis. If the safe metadata
+remains null, stop and investigate rather than fabricate identity/time evidence.
+
+References: [Supabase Realtime protocol](https://supabase.com/docs/guides/realtime/protocol),
+[Vercel function duration](https://vercel.com/docs/functions/configuring-functions/duration),
+[Vercel streaming](https://vercel.com/docs/functions/streaming-functions).
+
+## Local lifecycle correction — no periodic application rotation
+
+This section supersedes the prior local diagnosis's retained 45s-expiry behavior
+and its future proof-window instructions. Not deployed; no hosted access/writes.
+
+Removed `expiry = setTimeout(dispose, 45000)` and its timer bookkeeping from
+app/api/bartender/events/route.ts. A healthy SSE request now has no application
+age limit. It ends on request abort/cancellation, a terminal Realtime channel
+status, transport enqueue failure, or actual runtime/network termination. The
+15s `: keepalive` comment remains: no business data, no message event, no refetch.
+Cleanup still removes its interval and awaits channel/socket disposal.
+
+The browser no longer closes/replaces a healthy EventSource for visibility or
+online notifications. Those notifications can reopen an absent source when the
+page is visible. A real error closes/revokes the old source once, schedules retry,
+and its replacement SUBSCRIBED acknowledgement triggers one reconnect-recovery
+read. Duplicate acknowledgements are ignored. There is no recovery read merely
+because time passed or an online/visibility event fired. Initial subscription uses
+initial-load. Revocation prevents old callbacks and in-flight generation-bound
+reads from applying state; each replacement advances generation exactly once.
+Unmount closes the current source and cancels timers. Existing Auth/RLS and
+server-only token handling are unchanged. Each new connection revalidates access.
+
+Expected lifetime: no intentional 45s rotation. The existing Node route's
+`maxDuration = 60` is unchanged, so hosted Vercel requests remain platform-bounded;
+this change does NOT promise an indefinite hosted connection. Heartbeats do not
+extend that maximum. Recovery remains necessary after a real platform EOF/error.
+No platform setting or hosted Auth/session setting was modified.
+
+30s visible-page polling remains active while SSE is healthy, independently tagged.
+Defensive normalized/wire metadata extraction and null timestamp semantics remain
+unchanged. No domain writes occur in any callback or recovery path.
+
+Local validation covers six idle heartbeats (90s of scheduled intervals), with no
+expiry timeout registered and no channel disposal; polling through three 30s
+cycles with the same client generation; redundant online/visibility notifications;
+real error/retry producing exactly one replacement generation; one recovery read
+on its acknowledgement; stale callback/in-flight read rejection; SSE-only reads,
+coalescing, cleanup, and installed SDK INSERT/UPDATE metadata extraction.
+42 Realtime/UI/API tests and 32 Auth tests pass; typecheck/build/diff check pass.
+These are deterministic local lifecycle tests, not a Vercel longevity claim.
+
+Ready for a separately authorized diagnostic Preview deployment. First confirm
+hosted connection health beyond 45s read-only and observe the actual platform
+lifetime. A final separately authorized single mutation using a distinct writer
+identity is still needed for passive-observer proof. Select a fresh stable observer
+connection with a settled initial/recovery read and ample time before both next
+poll and platform termination; require matching UUID/event metadata, sse-stale-only
+application and unchanged generation across that proof. Do not retry on ambiguity.
+Run 6d38ce08-19e8-4825-8386-37339fb42b82 and all hosted fixtures remain untouched.

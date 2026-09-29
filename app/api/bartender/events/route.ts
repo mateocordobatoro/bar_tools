@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { realtimeMetadata } from '@/lib/bartender/realtime-metadata';
 import { randomUUID } from 'node:crypto';
 import { createClient as createRealtimeClient } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/server';
@@ -42,14 +43,14 @@ export async function GET(request: NextRequest) {
      try {controller.enqueue(encoder.encode(`event: diagnostic\ndata: ${JSON.stringify(entry)}\n\n`));} catch { /* Cancellation must still clean up the channel. */ }
     };
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let expiry: ReturnType<typeof setTimeout> | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     const channel = realtime.channel('bartender-invalidation');
     let closing: Promise<void> | undefined;
     dispose = () => {
      if (closed) return closing ?? Promise.resolve();
      diagnostic('cleanup');
      closed = true;
-     clearTimeout(timer); clearTimeout(expiry);
+     clearTimeout(timer); clearInterval(heartbeat);
      request.signal.removeEventListener('abort', dispose);
      closing = realtime.removeChannel(channel).catch(() => {}).then(async () => {await realtime.realtime.disconnect();});
      try {controller.close();} catch { /* Consumer already cancelled. */ }
@@ -65,19 +66,18 @@ export async function GET(request: NextRequest) {
     };
     for (const table of tables) for (const event of ['INSERT', 'UPDATE'] as const) {
      channel.on('postgres_changes', {event, schema: 'public', table}, payload => {
-      // Only UUID primary keys and a normalized commit timestamp can leave the payload.
-      const column = table === 'inventory_balances' ? 'account_id' : table === 'recipe_operational_settings' ? 'recipe_id' : 'id';
-      const value = ((payload.new ?? {}) as Record<string, unknown>)[column];
-      const recordId = typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null;
-      const time = typeof payload.commit_timestamp === 'string' ? Date.parse(payload.commit_timestamp) : NaN;
-      diagnostic('database-event', {schema: 'public', table, eventType: event, recordId, eventTimestamp: Number.isFinite(time) ? new Date(time).toISOString() : null});
+      diagnostic('database-event', realtimeMetadata(payload, table, event));
       signal();
      });
     }
     // A fresh connection repairs any events missed during reconnect. Each connection
     // revalidates Auth and active staff. Postgres Changes additionally applies row RLS.
     controller.enqueue(encoder.encode('retry: 3000\n\n'));
-    expiry = setTimeout(dispose, 45000);
+    // SSE comments keep an idle transport active; they are not message events.
+    // They do not extend Vercel maxDuration; only actual termination ends this stream.
+    heartbeat = setInterval(() => {
+     if (!closed) {try {controller.enqueue(encoder.encode(': keepalive\n\n'));} catch {void dispose();}}
+    }, 15000);
     request.signal.addEventListener('abort', dispose, {once: true});
     if (request.signal.aborted) {dispose(); return;}
     diagnostic('subscribe');
