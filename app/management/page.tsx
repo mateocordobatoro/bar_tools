@@ -1,5 +1,7 @@
 import { requireStaff } from "@/lib/auth/session";
 import { logout } from "@/app/auth/actions";
+import {demoEnabled} from '@/lib/sales-demo/config';
+import SalesDemo from './sales-demo';
 export default async function Page() {
   const staff = await requireStaff("management");
   return <main className="shell"><section className="card auth-card">
@@ -7,5 +9,5 @@ export default async function Page() {
     <h1>Welcome, {staff.display_name}</h1>
     <p>Your management access is verified. Your workspace will be available here.</p>
     <form action={logout}><button type="submit">Sign out</button></form>
-  </section></main>;
+  </section>{demoEnabled(process.env)&&<SalesDemo/>}</main>;
 }

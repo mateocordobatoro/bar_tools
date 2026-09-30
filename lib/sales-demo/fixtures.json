@@ -1,0 +1,206 @@
+{
+  "prefix": "DEMO60-v1 ",
+  "raw": [
+    {
+      "key": "tequila",
+      "name": "Tequila",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 900
+    },
+    {
+      "key": "lime",
+      "name": "Lime",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 1200
+    },
+    {
+      "key": "vodka",
+      "name": "Vodka",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 300
+    },
+    {
+      "key": "coffee",
+      "name": "Coffee liqueur",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 200
+    },
+    {
+      "key": "espresso",
+      "name": "Espresso",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 200
+    },
+    {
+      "key": "wine",
+      "name": "Wine",
+      "unit": "ml",
+      "quantum": 1,
+      "baseline": 750
+    },
+    {
+      "key": "beer",
+      "name": "Beer",
+      "unit": "unit",
+      "quantum": 1,
+      "baseline": 2
+    }
+  ],
+  "recipe": {
+    "name": "Margarita",
+    "baseline": 1,
+    "threshold": 0.3,
+    "ingredients": [
+      {
+        "key": "tequila",
+        "quantity": 600
+      },
+      {
+        "key": "lime",
+        "quantity": 400
+      }
+    ]
+  },
+  "menu": [
+    {
+      "name": "Margarita",
+      "requirements": [
+        {
+          "key": "batch",
+          "quantity": 0.1
+        }
+      ]
+    },
+    {
+      "name": "Espresso Martini",
+      "requirements": [
+        {
+          "key": "vodka",
+          "quantity": 45
+        },
+        {
+          "key": "coffee",
+          "quantity": 20
+        },
+        {
+          "key": "espresso",
+          "quantity": 30
+        }
+      ]
+    },
+    {
+      "name": "Tequila shot",
+      "requirements": [
+        {
+          "key": "tequila",
+          "quantity": 30
+        }
+      ]
+    },
+    {
+      "name": "Wine glass",
+      "requirements": [
+        {
+          "key": "wine",
+          "quantity": 150
+        }
+      ]
+    },
+    {
+      "name": "Beer",
+      "requirements": [
+        {
+          "key": "beer",
+          "quantity": 1
+        }
+      ]
+    }
+  ],
+  "sequence": [
+    [
+      0,
+      2
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      3,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      4,
+      1
+    ],
+    [
+      1,
+      2
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      2,
+      1
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      3,
+      2
+    ],
+    [
+      4,
+      2
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      1,
+      1
+    ],
+    [
+      0,
+      1
+    ],
+    [
+      2,
+      2
+    ],
+    [
+      3,
+      1
+    ],
+    [
+      0,
+      2
+    ],
+    [
+      0,
+      2
+    ]
+  ]
+}

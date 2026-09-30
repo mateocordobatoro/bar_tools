@@ -1,0 +1,151 @@
+{
+  "project_ref": "mfwoutniamoldcieoqvc",
+  "project_name": "bar_tools_preview",
+  "prefix": "DEMO60-v1 ",
+  "fixtures": {
+    "raw": {
+      "beer": {
+        "name": "DEMO60-v1 Beer",
+        "unit": "unit",
+        "item_id": "413205ed-3948-4c80-9a57-67c04bc2453e",
+        "quantum": 1,
+        "baseline": 2,
+        "account_id": "b67f7379-910a-47c0-a463-b99fb7368e4e"
+      },
+      "lime": {
+        "name": "DEMO60-v1 Lime",
+        "unit": "ml",
+        "item_id": "58145021-40c0-403b-8364-73d657f44c4a",
+        "quantum": 1,
+        "baseline": 1200,
+        "account_id": "eccaa87e-2fdb-46a0-91c3-97e5d7fe312e"
+      },
+      "wine": {
+        "name": "DEMO60-v1 Wine",
+        "unit": "ml",
+        "item_id": "17082966-fc90-4ea3-9085-a84afd5e5aaa",
+        "quantum": 1,
+        "baseline": 750,
+        "account_id": "465676ff-7b08-4f37-9a55-85bcf4121632"
+      },
+      "vodka": {
+        "name": "DEMO60-v1 Vodka",
+        "unit": "ml",
+        "item_id": "175cd6a7-b2d5-428c-a09a-78a56a6c4a65",
+        "quantum": 1,
+        "baseline": 300,
+        "account_id": "943e71b8-57b5-4093-a3d7-08e23605abd8"
+      },
+      "coffee": {
+        "name": "DEMO60-v1 Coffee liqueur",
+        "unit": "ml",
+        "item_id": "89f41884-3c8d-48ae-9c2d-68ffc3f32397",
+        "quantum": 1,
+        "baseline": 200,
+        "account_id": "778d54c5-fc81-443f-a343-7de5289840bf"
+      },
+      "tequila": {
+        "name": "DEMO60-v1 Tequila",
+        "unit": "ml",
+        "item_id": "dc4d9685-710a-4c7d-b856-a53720eee9b2",
+        "quantum": 1,
+        "baseline": 900,
+        "account_id": "44a087be-ed47-4ba2-8e7b-94885ae270f7"
+      },
+      "espresso": {
+        "name": "DEMO60-v1 Espresso",
+        "unit": "ml",
+        "item_id": "8e729475-1c02-4822-b0ef-299aa682608a",
+        "quantum": 1,
+        "baseline": 200,
+        "account_id": "d7a90e67-3c7b-4155-a2c0-c26ed9eea337"
+      }
+    },
+    "runs": 0,
+    "menus": [
+      {
+        "name": "DEMO60-v1 Margarita",
+        "menu_item_id": "f5bf3d53-ade0-48db-83c1-e0dc92de7cb4",
+        "requirements": [
+          {
+            "item_id": null,
+            "quantity": 0.1,
+            "stock_identity_id": "9128cf48-5987-42cf-8505-926f295f572a"
+          }
+        ],
+        "serving_definition_id": "ab60d5f3-036c-47c3-a107-53527a2ac3bd"
+      },
+      {
+        "name": "DEMO60-v1 Espresso Martini",
+        "menu_item_id": "1fbafdc1-2d68-4a91-aa8c-1798d1f6f93a",
+        "requirements": [
+          {
+            "item_id": "175cd6a7-b2d5-428c-a09a-78a56a6c4a65",
+            "quantity": 45,
+            "stock_identity_id": null
+          },
+          {
+            "item_id": "89f41884-3c8d-48ae-9c2d-68ffc3f32397",
+            "quantity": 20,
+            "stock_identity_id": null
+          },
+          {
+            "item_id": "8e729475-1c02-4822-b0ef-299aa682608a",
+            "quantity": 30,
+            "stock_identity_id": null
+          }
+        ],
+        "serving_definition_id": "93638395-1cd6-43d7-962e-071c7d57275f"
+      },
+      {
+        "name": "DEMO60-v1 Tequila shot",
+        "menu_item_id": "d419b2aa-66da-4543-aca5-ef44bb6d291e",
+        "requirements": [
+          {
+            "item_id": "dc4d9685-710a-4c7d-b856-a53720eee9b2",
+            "quantity": 30,
+            "stock_identity_id": null
+          }
+        ],
+        "serving_definition_id": "ca52ca8e-5221-43eb-ac6e-a2001640821c"
+      },
+      {
+        "name": "DEMO60-v1 Wine glass",
+        "menu_item_id": "5b4403db-509f-4b67-91b4-2b07a8acdc88",
+        "requirements": [
+          {
+            "item_id": "17082966-fc90-4ea3-9085-a84afd5e5aaa",
+            "quantity": 150,
+            "stock_identity_id": null
+          }
+        ],
+        "serving_definition_id": "faa79794-4de2-49c3-a0b4-c2c152128aca"
+      },
+      {
+        "name": "DEMO60-v1 Beer",
+        "menu_item_id": "3eae72a1-9456-4258-b4e1-b886b965d5da",
+        "requirements": [
+          {
+            "item_id": "413205ed-3948-4c80-9a57-67c04bc2453e",
+            "quantity": 1,
+            "stock_identity_id": null
+          }
+        ],
+        "serving_definition_id": "8c5c58de-6fd6-4df5-8064-975e07f51a99"
+      }
+    ],
+    "sales": 0,
+    "recipe": {
+      "baseline": 1,
+      "increment": 0.5,
+      "recipe_id": "aff2be75-d9da-45fc-a269-d2cb0898af7d",
+      "threshold": 0.3,
+      "account_id": "7a214754-143c-46dc-a218-fa1aabae136c",
+      "version_id": "4c1f5491-0904-477f-a0a4-88a5ed0d38b9",
+      "stock_identity_id": "9128cf48-5987-42cf-8505-926f295f572a"
+    },
+    "requests": 0,
+    "opening_movements": 8
+  },
+  "configuration_note": "Operational fixture IDs only; no Auth identities, credentials or tokens. The server resolves exact dedicated names and validates transitive requirements; no fixture ID environment variables are required."
+}
