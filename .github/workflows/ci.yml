@@ -23,5 +23,6 @@ jobs:
       - run: npm run test:auth
       - run: npm run test:bartender
       - run: npm run test:demo
+      - run: npm run test:management
       - run: npm run test:auth:http
       - run: npm run build

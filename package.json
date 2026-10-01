@@ -19,7 +19,8 @@
     "test:auth": "node --test scripts/auth.test.mjs",
     "test:auth:http": "node scripts/auth-http.test.mjs",
     "test:bartender": "node --test scripts/bartender.test.mjs",
-    "test:demo": "node --test scripts/sales-demo.test.mjs"
+    "test:demo": "node --test scripts/sales-demo.test.mjs",
+    "test:management": "node --test scripts/management.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
