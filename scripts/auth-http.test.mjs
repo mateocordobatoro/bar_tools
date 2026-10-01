@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
+import { JSDOM } from 'jsdom';
 let checks=0, app;
 const roles={manager:'management',bar:'bartender',inactive:'bartender',unprovisioned:null};
 const inactive=new Set(['inactive']);
@@ -54,7 +55,17 @@ try{
     const r=await get(path,cookie(id));check(r.status===307&&new URL(r.headers.get('location'),origin).pathname===expected,`${id} route boundary`);
   }
   for(const [id,path] of [['bar','/bartender'],['manager','/management']]){
-    const r=await get(path,cookie(id));check(r.status===200&&(await r.text()).includes(id==='bar'?'Prep workspace':`Welcome, <!-- -->Synthetic ${id}`),`${id} landing renders`);
+    const r=await get(path,cookie(id));const html=await r.text();
+    check(r.status===200,`${id} protected route succeeds`);
+    if(id==='bar')check(html.includes('Prep workspace'),'bar landing renders');
+    else {
+      const dom=new JSDOM(html);const document=dom.window.document;
+      const navigation=document.querySelector('nav[aria-label="Management sections"]');
+      check(navigation!==null,'Management navigation renders');
+      check([...navigation.querySelectorAll('button')].map(button=>button.textContent).join('|')==='Overview|Inventory|Prep|Recipes|Staff','Management V1 modules render');
+      check(navigation.querySelector('[aria-current="page"]')?.textContent==='Overview'&&document.querySelector('main h1')?.textContent==='Overview','Management opens the Overview section');
+      dom.window.close();
+    }
   }
   const renewed=await get('/bartender',cookie('bar',true));
   check(renewed.status===200&&refreshes>0,'Expired session refreshed before protected render');
