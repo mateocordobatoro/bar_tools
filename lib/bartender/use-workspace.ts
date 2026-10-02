@@ -10,7 +10,7 @@ const storageKey='bartools:pending-production:';
 export function useWorkspace(staffId:string,diagnostics=false) {
  const [stale,setStale]=useState(false);
  const [snapshot,setSnapshot]=useState<Snapshot|null>(null);
- const [tab,setTab]=useState('Prep');const [selection,setSelection]=useState<Selection|null>(null);
+ const [tab,setTab]=useState('Today');const [selection,setSelection]=useState<Selection|null>(null);
  const [qty,setQty]=useState('');const [availability,setAvailability]=useState<Availability|null>(null);
  const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [loading,setLoading]=useState(true);
  const [reason,setReason]=useState('');const [pending,setPending]=useState<Command|null>(null);

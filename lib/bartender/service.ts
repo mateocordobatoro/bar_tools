@@ -7,7 +7,7 @@ async function rows<T>(client:SupabaseClient,table:string,columns:string):Promis
  const output:T[]=[];
  for(let offset=0;offset<10000;offset+=500) {
   const {data,error}=await client.from(table).select(columns).order(table==='inventory_balances'?'account_id':'id').range(offset,offset+499);
-  if(error) throw new Error('Workspace read failed');
+  if(error||!data) throw new Error('Workspace read failed');
   output.push(...data as T[]);
   if(data.length<500) return output;
  }
@@ -30,14 +30,19 @@ export async function loadWorkspace(c:SupabaseClient):Promise<Snapshot> {
  rows<RunStep>(c,'batch_run_steps','id,batch_run_id,recipe_step_id,status'),
  rpc<Availability[]>(c,'get_prep_overview'),
  rows<{id:string;name:string}>(c,'batch_stock_identities','id,name'),
- rows<{id:string;stock_identity_id:string|null}>(c,'inventory_accounts','id,stock_identity_id'),
+ rows<{id:string;stock_identity_id:string|null;item_id:string|null}>(c,'inventory_accounts','id,stock_identity_id,item_id'),
  rows<{account_id:string;quantity:number;initialized:boolean}>(c,'inventory_balances','account_id,quantity,initialized'),
  rows<{id:string;run_id:string;event_type:string;detail:{reason?:string};occurred_at:string}>(c,'production_events','id,run_id,event_type,detail,occurred_at'),
  ]);
+ const [menuItems,servings,servingInputs]=await Promise.all([
+ rows<{id:string;name:string}>(c,'menu_items','id,name'),
+ rows<{id:string;menu_item_id:string;version_number:number;approved_at:string|null}>(c,'serving_definitions','id,menu_item_id,version_number,approved_at'),
+ rows<{id:string;serving_definition_id:string;item_id:string|null;stock_identity_id:string|null;quantity_per_serving:number}>(c,'serving_requirements','id,serving_definition_id,item_id,stock_identity_id,quantity_per_serving')]);
+ const menu=menuItems.map(m=>{const v=servings.filter(v=>v.menu_item_id===m.id&&v.approved_at).sort((a,b)=>b.version_number-a.version_number)[0];return {id:m.id,name:m.name,configured:!!v,ingredients:servingInputs.filter(r=>r.serving_definition_id===v?.id).map(r=>({name:items.find(i=>i.id===r.item_id)?.name??identities.find(i=>i.id===r.stock_identity_id)?.name??'Unavailable ingredient',quantity:Number(r.quantity_per_serving),unit:r.item_id?items.find(i=>i.id===r.item_id)?.base_unit??'':'batch'}))};});
  const runs=allRuns.filter(r=>r.lifecycle==='IN_PROGRESS'||r.lifecycle==='BLOCKED');
  const runAvailability=Object.fromEntries(await Promise.all(runs.map(async r=>[r.id,await rpc<Availability>(c,'get_run_availability',{p_run:r.id})])));
  const blockers:Record<string,string>={};
  for(const event of events.sort((a,b)=>a.occurred_at.localeCompare(b.occurred_at))) if(event.event_type==='BLOCK') blockers[event.run_id]=event.detail.reason??'';
- return {recipes,versions,steps,requirements,items,requests,runs,runHistory:allRuns.filter(r=>r.lifecycle==='COMPLETED'||r.lifecycle==='ABANDONED'),runSteps,overview,runAvailability,blockers,
+ return {menu,inventory:items.map(i=>{const a=accounts.find(a=>a.item_id===i.id),b=balances.find(b=>b.account_id===a?.id);return {id:i.id,name:i.name,unit:i.base_unit,quantity:b?.initialized?Number(b.quantity):null};}),recipes,versions,steps,requirements,items,requests,runs,runHistory:allRuns.filter(r=>r.lifecycle==='COMPLETED'||r.lifecycle==='ABANDONED'),runSteps,overview,runAvailability,blockers,
  stock:identities.map(i=>{const account=accounts.find(a=>a.stock_identity_id===i.id);const b=balances.find(b=>b.account_id===account?.id);return {id:i.id,name:i.name,quantity:b?.initialized?Number(b.quantity):null};}),fetchedAt:new Date().toISOString()};
 }

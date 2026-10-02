@@ -7,7 +7,7 @@ export type Prep={id:string;name:string;stock:number|null;threshold:number;shoul
 export type Progress={request_id:string;recipe_id:string;state:string;requested:number;fulfilled:number;remaining:number;in_progress:number};
 export type Recipe={id:string;name:string;version:number;mode:string;increment:number;ingredients:{name:string;quantity:number;unit:string;step:string|null}[];steps:{name:string;instructions:string}[]};
 export type Staff={id:string;display_name:string;role:'management'|'bartender';active:boolean};
-export type Snapshot={inventory:Inventory[];prep:Prep[];requests:Progress[];recipes:Recipe[];staff:Staff[];countDiscrepancies:number;fetchedAt:string};
+export type Snapshot={menu?:{id:string;name:string;ingredients:{name:string;quantity:number;unit:string}[];configured:boolean}[];activity?:{id:string;time:string;kind:string;lines:{name:string;delta:number;unit:string;current:number|null}[]}[];inventory:Inventory[];prep:Prep[];requests:Progress[];recipes:Recipe[];staff:Staff[];countDiscrepancies:number;fetchedAt:string};
 export function stockStatus(q:number|null,low:number|null,critical:number|null):Status {
  if(q===null)return 'Count needed';if(q<0)return 'Reconcile';
  if(critical!==null&&q<=critical)return 'Critical';if(low!==null&&q<=low)return 'Low';return low===null?'Unconfigured':'Healthy';

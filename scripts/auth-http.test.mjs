@@ -62,7 +62,7 @@ try{
       const dom=new JSDOM(html);const document=dom.window.document;
       const navigation=document.querySelector('nav[aria-label="Management sections"]');
       check(navigation!==null,'Management navigation renders');
-      check([...navigation.querySelectorAll('button')].map(button=>button.textContent).join('|')==='Overview|Inventory|Prep|Recipes|Staff','Management V1 modules render');
+      check([...navigation.querySelectorAll('button')].map(button=>button.textContent).join('|')==='Overview|Inventory|Prep|Recipes|Activity|Staff','Management V1 modules render');
       check(navigation.querySelector('[aria-current="page"]')?.textContent==='Overview'&&document.querySelector('main h1')?.textContent==='Overview','Management opens the Overview section');
       dom.window.close();
     }

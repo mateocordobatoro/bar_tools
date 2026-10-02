@@ -8,6 +8,7 @@ export function stateFor(page){
  s.recipes[1].name='Clarified pineapple, coconut and toasted spice cordial';
  s.items[1].name='Fine clarification filters — food-safe paper';
  for(let i=0;i<7;i++)s.items.push({id:id(300+i),name:i===0?'ExtraLongIngredientNameWithoutSpacesToTestSafeWrappingAt320Pixels':'Prepared citrus ingredient with a long descriptive name '+(i+1),base_unit:'ml'});
+ s.inventory=s.items.map((i,n)=>({id:i.id,name:i.name,unit:i.base_unit,quantity:n===0?0:n===1?-1:null}));
  const longMissing=s.items.slice(1).map((item,i)=>({item_id:item.id,step_order:2,deficit:i+1,reason:'INSUFFICIENT'}));
  s.overview[1].missing_inputs=longMissing;s.overview[1].should_prep=false;
  s.steps[1].instructions='Mix gently, then leave covered until clarification is complete.';
@@ -22,5 +23,5 @@ export function stateFor(page){
   if(page==='missing'){availability.can_complete=false;availability.missing_inputs=longMissing;}
  }
  if(['run','blocked'].includes(page)){selectedRun=s.runs[0];selection={kind:'run',id:selectedRun.id};}
- return {snapshot:s,tab:page==='stock'?'Batch Stock':['run','blocked','progress'].includes(page)?'In progress':'Prep',selection,selectedVersion,selectedRun,qty:'1',availability,reason:'',pending:['pending','saving'].includes(page)?{kind:'simple',version:id(1),batches:'1',key:id(99)}:null,busy:page==='saving',loading:false,message:page==='changed'?'Stock or this step changed. Review the refreshed details.':page==='session'?'Your access changed. Sign in again.':'',setTab:noop,setSelection:noop,setQty:noop,setAvailability:noop,setReason:noop,refresh:noop,act:noop,completeRemaining:noop,choose:noop};
+ return {snapshot:s,tab:page==='today'?'Today':page==='inventory'?'Inventory':page==='stock'?'Batch Stock':['run','blocked','progress'].includes(page)?'In progress':'Prep',selection,selectedVersion,selectedRun,qty:'1',availability,reason:'',pending:['pending','saving'].includes(page)?{kind:'simple',version:id(1),batches:'1',key:id(99)}:null,busy:page==='saving',loading:false,message:page==='changed'?'Stock or this step changed. Review the refreshed details.':page==='session'?'Your access changed. Sign in again.':'',setTab:noop,setSelection:noop,setQty:noop,setAvailability:noop,setReason:noop,refresh:noop,act:noop,completeRemaining:noop,choose:noop};
 }

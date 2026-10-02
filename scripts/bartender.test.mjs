@@ -74,7 +74,7 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
  const click=async(label)=>{const button=[...document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(button,label);assert.ok(!button.disabled,label+' enabled');await act(async()=>button.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));};
  try{
   await act(async()=>root.render(React.createElement(Component,{staffId:id(100)})));
-  assert.match(text(),/Requested1 batch/);assert.match(text(),/Fulfilled0.5 batches/);assert.match(text(),/Suggested to prep/);assert.match(text(),/Can complete through Clarify/);assert.match(text(),/Filters: 1 unit short/);assert.ok(!text().includes('ledger'));
+  assert.equal(document.querySelector('[aria-current="page"]')?.textContent,'Today');assert.ok(![...document.querySelectorAll('h2')].some(h=>h.textContent==='Ready to make'));await click('Prep');assert.match(text(),/Requested1 batch/);assert.match(text(),/Fulfilled0.5 batches/);assert.match(text(),/Suggested to prep/);assert.match(text(),/Can complete through Clarify/);assert.match(text(),/Filters: 1 unit short/);assert.ok(!text().includes('ledger'));
   assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Simulate sales').disabled);assert.ok([...document.querySelectorAll('button')].find(b=>b.textContent==='Reset demo').disabled);
   assert.equal([...document.querySelectorAll('h3')].filter(h=>h.textContent==='Margarita').length,2,'No duplicate low-stock recipe in Ready to make');
   await click('Start Batch');assert.equal(document.querySelector('.quantity-options').children.length,4);assert.ok(document.querySelector('.more-quantities'));assert.match(text(),/any excess remains in Batch Stock/);assert.match(text(),/250 ml · Tequila/);await click('1');
@@ -82,14 +82,14 @@ test('operational UI: request/overproduction, production, stock, multistep, shar
   assert.ok([...document.querySelectorAll('button')].some(b=>b.textContent==='Start Batch · 1 batch'&&!b.disabled),'Background refresh preserves the current selection action');
   holdAvailability=false;await act(async()=>releaseAvailability());
   await click('Start Batch · 1 batch');assert.equal(calls.at(-1).batches,'1');assert.equal(state.stock[0].quantity,1.24);
-  await click('Batch Stock');assert.match(text(),/1.24 batches/);await click('Prep');assert.match(text(),/No open management requests/);
+  await click('Batch Stock');assert.match(text(),/1.24 batches/);await click('Today');assert.match(text(),/No open management requests/);await click('Prep');
   // External stock consumption appears on refresh; UI does not write balances.
   state.stock[0].quantity=.2;state.overview[0].current_batch_stock=.2;state.overview[0].should_prep=true;state.fetchedAt='external-sale';
   await act(async()=>{sources.at(-1).onmessage({data:'stale'});sources.at(-1).onmessage({data:'stale'});await new Promise(r=>setTimeout(r,400));});const suggestions=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Suggested to prep');assert.match(suggestions.textContent,/Margarita/);assert.match(suggestions.textContent,/0.2 batches in stock/);
   const startSection=[...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.textContent==='Can start');await act(async()=>startSection.querySelector('button').click());await click('Start Batch · 0.5 batches');assert.ok(document.querySelector('.batch-checklist'));await click('Complete Clarify');assert.ok(document.querySelector('.step-done'));assert.ok(document.querySelector('.step-next'));assert.equal(document.querySelectorAll('.batch-checklist .step-details').length,2);assert.ok([...document.querySelectorAll('.step-details')].every(d=>!d.open));assert.match(text(),/✓ ClarifyCompleted/);assert.match(text(),/Filter/);
   // A fresh bartender mounts the same shared run and can operate it.
   await act(async()=>root.render(React.createElement(Component,{staffId:id(101),key:'second'})));await click('In progress');await click('Continue');
-  const input=document.querySelector('input');await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input,'Waiting for filters');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
+  const input=document.querySelector('.block-reason input');await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value').set.call(input,'Waiting for filters');input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
   await click("Can't continue");assert.match(text(),/Waiting: Waiting for filters/);await click('Resume work');assert.equal(calls.at(-1).kind,'resume');
   loseResponse=true;await click('Complete Filter');assert.match(text(),/Retry same action/);const key=calls.at(-1).key;await click('Retry same action');assert.equal(calls.at(-1).key,key);assert.equal(dom.window.sessionStorage.getItem('bartools:pending-production:'+id(101)),null);
   assert.equal(calls.some(c=>'actor' in c||'request' in c),false);
@@ -109,7 +109,7 @@ test('workspace service preserves historical stock identity, fixed run version a
  batch_stock_identities:[{id:id(51),name:'Margarita'},{id:id(52),name:'Pineapple'}],inventory_accounts:[{id:id(100),stock_identity_id:id(51)},{id:id(101),stock_identity_id:id(52)}],
  inventory_balances:[{account_id:id(100),quantity:1.4,initialized:true},{account_id:id(101),quantity:0,initialized:false}],
  production_events:[{id:id(200),run_id:id(80),event_type:'BLOCK',detail:{reason:'Filters'},occurred_at:'2026-09-26'}]};
- const calls=[];const c={from:table=>({select:()=>({order:()=>({range:async()=>({data:tables[table],error:null})})})}),rpc:async(name,args)=>{calls.push({name,args});return {data:name==='get_prep_overview'?s.overview:name==='get_request_progress'?s.requests:sample(2),error:null};}};
+ const calls=[];const c={from:table=>({select:()=>({order:()=>({range:async()=>({data:tables[table]??[],error:null})})})}),rpc:async(name,args)=>{calls.push({name,args});return {data:name==='get_prep_overview'?s.overview:name==='get_request_progress'?s.requests:sample(2),error:null};}};
  const {loadWorkspace}=load('lib/bartender/service.ts');const out=await loadWorkspace(c);
  assert.equal(out.stock.length,2);assert.equal(out.stock[0].quantity,1.4);assert.equal(out.stock[1].quantity,null);assert.equal(out.runs.length,1);assert.equal(out.runs[0].recipe_version_id,id(2));assert.equal(out.blockers[id(80)],'Filters');assert.equal(calls.find(c=>c.name==='get_run_availability').args.p_run,id(80));
 });
@@ -123,7 +123,7 @@ function mobileMarkup(page){const c=load('app/bartender/workspace.tsx',{'@/lib/b
 test('mobile separates saving from uncertain-result retry',()=>{const saving=mobileMarkup('saving'),pending=mobileMarkup('pending');assert.match(saving,/Saving… Please wait/);assert.ok(!saving.includes('Retry same action'));assert.match(pending,/Retry same action/);});
 test('mobile shows remaining request first, stock low signal, and no duplicate ready recipe',()=>{const prep=mobileMarkup('prep');assert.ok(prep.indexOf('Requests')<prep.indexOf('Suggested to prep'));assert.ok(prep.indexOf('0.5 batches remaining')<prep.indexOf('Requested'));assert.equal((prep.match(/<h3>Margarita<\/h3>/g)||[]).length,2);assert.match(mobileMarkup('stock'),/Low stock · prep suggested/);});
 test('mobile shows the full persistent checklist and keeps blocked action unambiguous',()=>{const run=mobileMarkup('run'),blocked=mobileMarkup('blocked');assert.match(run,/batch-checklist/);assert.match(run,/✓ Clarify/);assert.match(run,/Complete remaining steps/);assert.ok(!run.includes('<summary>Next'));assert.match(blocked,/Resume work/);assert.ok(!blocked.includes('Complete Filter'));});
-test('mobile long missing lists remain expandable and forms avoid physical quantity input',()=>{const missing=mobileMarkup('missing'),run=mobileMarkup('run');assert.match(missing,/6 more missing inputs/);assert.match(missing,/ExtraLongIngredientName/);assert.ok(!missing.includes('<input'));assert.match(run,/enterKeyHint="done"/);assert.match(mobileMarkup('changed'),/Stock or this step changed/);});
+test('mobile long missing lists remain expandable and forms avoid physical quantity input',()=>{const missing=mobileMarkup('missing'),run=mobileMarkup('run');assert.match(missing,/6 more missing inputs/);assert.match(missing,/ExtraLongIngredientName/);assert.equal((missing.match(/<input/g)??[]).length,1);assert.match(missing, /type="search"/);assert.match(run,/enterKeyHint="done"/);assert.match(mobileMarkup('changed'),/Stock or this step changed/);});
 
 for(const scenario of ['complete','missing','rejected','lost-response','refresh-failed']) test(`persistent checklist sequential completion: ${scenario}`,async()=>{
  const {JSDOM}=await import('jsdom');const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost/'});
@@ -331,4 +331,11 @@ for(const event of ['INSERT','UPDATE'])test(`installed SDK ${event} callback ext
  assert.equal(metadata.realtimeMetadata({...received,table:'private_audit'},'batch_runs',event).recordId,null);
  for(const [table,column] of [['inventory_balances','account_id'],['recipe_operational_settings','recipe_id']])assert.equal(metadata.realtimeMetadata({...received,table,new:{[column]:id(78)}},table,event).recordId,id(78));
  await client.removeAllChannels();
+});
+
+test('bartender inventory projection preserves unknown and negative balances and uses permitted reads only',async()=>{
+ const tables={inventory_items:[{id:'a',name:'Unknown lime',base_unit:'ml'},{id:'b',name:'Negative tequila',base_unit:'ml'}],inventory_accounts:[{id:'aa',item_id:'a'},{id:'bb',item_id:'b'}],inventory_balances:[{account_id:'aa',initialized:false,quantity:0},{account_id:'bb',initialized:true,quantity:-4}]};const reads=[];
+ const c={from:t=>{reads.push(t);const q={select:()=>q,order:()=>q,range:async()=>({data:tables[t]??[]})};return q;},rpc:async()=>({data:[]})};
+ const service=load('lib/bartender/service.ts',{'server-only':{}},{Date});const result=await service.loadWorkspace(c);
+ assert.equal(result.inventory[0].quantity,null);assert.equal(result.inventory[1].quantity,-4);assert.ok(!reads.includes('inventory_item_operational_settings'));assert.ok(!reads.some(t=>t.includes('private')));
 });

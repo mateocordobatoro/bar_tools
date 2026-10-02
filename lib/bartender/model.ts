@@ -6,8 +6,10 @@ export type Run = { id:string; recipe_version_id:string; batch_quantity:number; 
 export type RunStep = { id:string; batch_run_id:string; recipe_step_id:string; status:string };
 export type RequestProgress = { request_id:string; recipe_id:string; state:string; requested:number; fulfilled:number; remaining:number; in_progress:number };
 export type Snapshot = {
+ menu?:{id:string;name:string;ingredients:{name:string;quantity:number;unit:string}[];configured:boolean}[];
  recipes:{id:string;name:string}[]; versions:Version[]; steps:Step[]; requirements:Requirement[];
  items:{id:string;name:string;base_unit:string}[]; requests:RequestProgress[]; runs:Run[]; runSteps:RunStep[];
+ inventory?:{id:string;name:string;unit:string;quantity:number|null}[];
  runHistory?:Run[]; overview:Availability[]; runAvailability:Record<string,Availability>;
  blockers:Record<string,string>; stock:{id:string;name:string;quantity:number|null}[]; fetchedAt:string;
 };
